@@ -1,4 +1,4 @@
-package com.example.nexora
+﻿package gov.nexora.fieldtest
 
 import io.flutter.embedding.android.FlutterActivity
 

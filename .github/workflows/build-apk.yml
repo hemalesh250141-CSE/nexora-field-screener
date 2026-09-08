@@ -31,7 +31,15 @@ jobs:
         run: flutter pub get
 
       - name: Build release APK
-        run: flutter build apk --release --no-tree-shake-icons
+        run: |
+          set -o pipefail
+          flutter build apk --release --no-tree-shake-icons -v 2>&1 | tee flutter_build.log
+
+      - name: Print error log if failed
+        if: failure()
+        run: |
+          echo "=== BUILD FAILED: LAST 150 LINES ==="
+          tail -n 150 flutter_build.log
 
       - name: Verify APK
         shell: bash

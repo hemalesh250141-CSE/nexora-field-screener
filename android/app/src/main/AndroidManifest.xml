@@ -1,5 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="gov.nexora.fieldtest">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Forensic Field Capture Permissions -->
     <uses-permission android:name="android.permission.CAMERA" />
