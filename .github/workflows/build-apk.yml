@@ -25,26 +25,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-
-      - name: Configure Gradle version
-        working-directory: android
-        shell: bash
-        run: |
-          sed -i 's#gradle-[0-9.]*-all.zip#gradle-8.14.3-all.zip#' gradle/wrapper/gradle-wrapper.properties
-          echo "Configured Gradle wrapper:"
-          cat gradle/wrapper/gradle-wrapper.properties
-
-      - name: Verify Gradle version
-        working-directory: android
-        shell: bash
-        run: |
-          echo "Gradle wrapper:"
-          grep distributionUrl gradle/wrapper/gradle-wrapper.properties
-          chmod +x gradlew
-          ./gradlew --version
-
-      - name: Flutter doctor
-        run: flutter doctor -v
+          cache: true
 
       - name: Get dependencies
         run: flutter pub get

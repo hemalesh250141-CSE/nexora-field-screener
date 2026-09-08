@@ -30,4 +30,3 @@ flutter:
   assets:
     - assets/
     - assets/reference_cards/
-Transform: AWS::Serverless-2016-10-31
