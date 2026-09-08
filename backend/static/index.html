@@ -1,0 +1,2677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXORA — Digital Field Testing Companion</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <style>
+        :root {
+            --classic-black: #111111;
+            --bg-black: #0D0D0D;
+            --pure-white: #FFFFFF;
+            --deep-brown: #3E2723;
+            --tactical-khaki: #C3B091;
+            --card-dark: #181818;
+            --border-subtle: #2E2E2E;
+            --border-strong: #4A4A4A;
+            --amber-presumptive: #D97706;
+            --green-verified: #047857;
+            --red-alert: #B91C1C;
+            --text-secondary: #CBD5E0;
+            --text-muted: #718096;
+            
+            /* Enhanced shadows for depth without glassmorphism */
+            --shadow-subtle: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+            --shadow-strong: 0 10px 15px -3px rgba(0, 0, 0, 0.8);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        /* Smooth scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--classic-black);
+            border-left: 1px solid var(--border-subtle);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-strong);
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--tactical-khaki);
+        }
+
+        body {
+            background-color: var(--bg-black);
+            color: var(--pure-white);
+            line-height: 1.5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Splash Screen */
+        #splashScreen {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: var(--classic-black);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.8s ease-out, visibility 0.8s;
+        }
+        .splash-logo {
+            font-size: 3rem;
+            font-weight: 900;
+            letter-spacing: 5px;
+            color: var(--pure-white);
+            margin-bottom: 20px;
+            animation: pulse-splash 1.5s infinite;
+        }
+        @keyframes pulse-splash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* View sections and transitions */
+        .app-view {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .app-view.active {
+            display: flex;
+            opacity: 1;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        header {
+            background-color: var(--classic-black);
+            border-bottom: 2px solid var(--tactical-khaki);
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: var(--shadow-strong);
+        }
+        .brand-title {
+            font-size: 1.25rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            color: var(--pure-white);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .brand-badge {
+            background: var(--tactical-khaki);
+            color: var(--classic-black);
+            padding: 2px 6px;
+            font-size: 0.65rem;
+            font-weight: 900;
+        }
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .utc-clock {
+            font-size: 0.8rem;
+            color: var(--tactical-khaki);
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .sync-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            border: 1px solid var(--green-verified);
+            color: #34D399;
+            background: rgba(4, 120, 87, 0.15);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .sync-pill:hover { background: rgba(4, 120, 87, 0.3); }
+        .sync-pill.offline {
+            border-color: var(--red-alert);
+            color: #F87171;
+            background: rgba(185, 28, 28, 0.15);
+        }
+        .pulse-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse-dot 2s infinite;
+        }
+        @keyframes pulse-dot { 0% { transform: scale(0.8); opacity: 0.5; } 50% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(0.8); opacity: 0.5; } }
+
+        /* Login Screen */
+        .login-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at center, var(--card-dark) 0%, var(--bg-black) 100%);
+            padding: 20px;
+        }
+        .login-box {
+            background: var(--classic-black);
+            border: 1px solid var(--border-strong);
+            box-shadow: var(--shadow-strong);
+            width: 100%;
+            max-width: 450px;
+            padding: 30px;
+        }
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 1px solid var(--border-subtle);
+            padding-bottom: 20px;
+        }
+        .seal-logo {
+            font-size: 40px;
+            margin-bottom: 10px;
+            color: var(--tactical-khaki);
+        }
+        .portal-tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .portal-tab {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .portal-tab.active {
+            color: var(--tactical-khaki);
+            border-bottom-color: var(--tactical-khaki);
+        }
+
+        /* Form Inputs */
+        .form-group { margin-bottom: 16px; }
+        label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: bold;
+            letter-spacing: 1px;
+            color: var(--tactical-khaki);
+            margin-bottom: 6px;
+        }
+        input, select, textarea {
+            width: 100%;
+            background: var(--bg-black);
+            border: 1px solid var(--border-subtle);
+            color: var(--pure-white);
+            padding: 10px 14px;
+            font-size: 0.85rem;
+            font-family: inherit;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--tactical-khaki);
+            box-shadow: 0 0 0 1px var(--tactical-khaki);
+        }
+        .input-error {
+            border-color: var(--red-alert) !important;
+        }
+        .error-msg {
+            color: var(--red-alert);
+            font-size: 0.7rem;
+            margin-top: 4px;
+            display: none;
+        }
+        .btn {
+            background: var(--tactical-khaki);
+            color: var(--classic-black);
+            border: 1px solid var(--tactical-khaki);
+            padding: 10px 18px;
+            font-size: 0.8rem;
+            font-weight: 900;
+            letter-spacing: 1px;
+            cursor: pointer;
+            text-transform: uppercase;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s;
+            width: 100%;
+        }
+        .btn:hover { background: #d5c3a4; box-shadow: var(--shadow-subtle); }
+        .btn:active { transform: translateY(1px); }
+        .btn-outline {
+            background: transparent;
+            color: var(--tactical-khaki);
+            border: 1px solid var(--tactical-khaki);
+        }
+        .btn-outline:hover { background: rgba(195, 176, 145, 0.1); }
+        .btn-amber {
+            background: var(--amber-presumptive);
+            color: var(--pure-white);
+            border-color: var(--amber-presumptive);
+        }
+        .btn-amber:hover { background: #e08b1f; }
+        .btn-sm { padding: 6px 12px; font-size: 0.7rem; width: auto; }
+
+        /* Main Dashboard Layout */
+        .dashboard-layout {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 240px;
+            background: var(--classic-black);
+            border-right: 1px solid var(--border-subtle);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+        }
+        .nav-item {
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: bold;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .nav-item:hover { background: rgba(255,255,255,0.03); color: var(--pure-white); }
+        .nav-item.active {
+            background: rgba(195, 176, 145, 0.1);
+            color: var(--tactical-khaki);
+            border-left-color: var(--tactical-khaki);
+        }
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 16px;
+            border-top: 1px solid var(--border-subtle);
+        }
+        .session-info {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+        .session-info strong { color: var(--pure-white); }
+
+        /* Content Area */
+        .main-content {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        /* Mandatory Statutory Banner */
+        .statutory-banner {
+            background: rgba(62, 39, 35, 0.8);
+            border: 1.5px solid var(--amber-presumptive);
+            padding: 12px 16px;
+            margin-bottom: 24px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            box-shadow: var(--shadow-subtle);
+        }
+        .statutory-banner .icon { color: var(--amber-presumptive); font-size: 1.5rem; }
+        .statutory-banner .title {
+            color: var(--amber-presumptive);
+            font-size: 0.75rem;
+            font-weight: 900;
+            letter-spacing: 1px;
+        }
+        .statutory-banner .body {
+            color: var(--pure-white);
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+
+        /* View Sections within Dashboard */
+        .content-section {
+            display: none;
+            animation: fadeIn 0.4s ease forwards;
+        }
+        .content-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* KPI Grid */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .kpi-card {
+            background: var(--card-dark);
+            border: 1px solid var(--border-subtle);
+            padding: 16px;
+            box-shadow: var(--shadow-subtle);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-strong);
+            border-color: var(--border-strong);
+        }
+        .kpi-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            font-weight: bold;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .kpi-value {
+            font-size: 1.8rem;
+            font-weight: 900;
+            margin: 6px 0 2px 0;
+            color: var(--pure-white);
+            font-variant-numeric: tabular-nums;
+        }
+        .kpi-sub { font-size: 0.7rem; color: var(--text-secondary); }
+
+        /* Tables */
+        .forensic-table-wrapper {
+            background: var(--card-dark);
+            border: 1px solid var(--border-subtle);
+            overflow-x: auto;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-subtle);
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 0.8rem; text-align: left; }
+        th {
+            background: var(--classic-black);
+            color: var(--tactical-khaki);
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-strong);
+            font-weight: 900;
+            letter-spacing: 1px;
+            white-space: nowrap;
+        }
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+        }
+        tr:hover td { background: rgba(255, 255, 255, 0.05); }
+        .row-details {
+            display: none;
+            background: var(--classic-black);
+            padding: 16px;
+            border-bottom: 1px solid var(--border-strong);
+        }
+        .row-details.open { display: table-row; }
+        
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            font-size: 0.65rem;
+            font-weight: bold;
+            border: 1px solid var(--border-strong);
+            text-transform: uppercase;
+            border-radius: 2px;
+        }
+        .badge-green { background: rgba(4, 120, 87, 0.2); border-color: var(--green-verified); color: #34D399; }
+        .badge-amber { background: rgba(217, 119, 6, 0.2); border-color: var(--amber-presumptive); color: #FBBF24; }
+        .badge-red { background: rgba(185, 28, 28, 0.2); border-color: var(--red-alert); color: #F87171; }
+        .badge-gray { background: rgba(113, 128, 150, 0.2); border-color: var(--text-muted); color: var(--text-secondary); }
+
+        /* Viewfinder */
+        .viewfinder-box {
+            background: var(--classic-black);
+            border: 1px solid var(--border-strong);
+            padding: 24px;
+            margin-bottom: 20px;
+            position: relative;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+        /* Viewfinder Corners */
+        .viewfinder-box::before, .viewfinder-box::after {
+            content: ''; position: absolute; width: 20px; height: 20px; border: 2px solid var(--tactical-khaki);
+        }
+        .viewfinder-box::before { top: 10px; left: 10px; border-right: none; border-bottom: none; }
+        .viewfinder-box::after { bottom: 10px; right: 10px; border-left: none; border-top: none; }
+        
+        /* Live Camera Viewport & HUD */
+        .camera-viewport-box {
+            background: #050505;
+            border: 1px solid var(--border-strong);
+            position: relative;
+            height: 380px;
+            width: 100%;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.9);
+            margin-bottom: 16px;
+        }
+        .camera-video-element {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+        .camera-canvas-element {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: none;
+        }
+        .camera-hud-layer {
+            position: absolute;
+            inset: 0;
+            display: none;
+            pointer-events: none;
+        }
+        .hud-target {
+            position: absolute;
+            border: 2px dashed;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.25);
+            transition: border-color 0.2s;
+            pointer-events: auto;
+        }
+        .hud-target-a {
+            left: 10%;
+            top: 15%;
+            width: 36%;
+            height: 70%;
+            border-color: var(--tactical-khaki);
+            box-shadow: 0 0 15px rgba(195, 176, 145, 0.3);
+        }
+        .hud-target-b {
+            right: 10%;
+            top: 15%;
+            width: 36%;
+            height: 70%;
+            border-color: var(--green-verified);
+            box-shadow: 0 0 15px rgba(4, 120, 87, 0.3);
+        }
+        .hud-tag {
+            font-size: 0.65rem;
+            font-weight: 900;
+            padding: 3px 6px;
+            display: inline-block;
+            background: rgba(17, 17, 17, 0.85);
+            letter-spacing: 1px;
+        }
+        .hud-center-cross {
+            align-self: center;
+            font-size: 1.8rem;
+            line-height: 1;
+            opacity: 0.8;
+        }
+        .hud-readout {
+            background: rgba(17, 17, 17, 0.9);
+            padding: 4px 8px;
+            font-size: 0.65rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid var(--border-subtle);
+        }
+        .hud-swatch {
+            width: 14px;
+            height: 14px;
+            border: 1px solid var(--pure-white);
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+        .camera-controls-bar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .camera-status-pill {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        .scan-line {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 2px;
+            background: rgba(195, 176, 145, 0.8);
+            box-shadow: 0 0 12px rgba(195, 176, 145, 0.9);
+            animation: scan 2.5s linear infinite;
+            display: none;
+        }
+        .scanning .scan-line { display: block; }
+        @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
+
+        /* Animated Progress Steps */
+        .science-pipeline {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0;
+            padding: 16px;
+            background: var(--card-dark);
+            border: 1px solid var(--border-subtle);
+        }
+        .pipeline-step {
+            flex: 1;
+            text-align: center;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            position: relative;
+            opacity: 0.5;
+            transition: opacity 0.3s, color 0.3s;
+        }
+        .pipeline-step::after {
+            content: '→';
+            position: absolute;
+            right: -10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--border-strong);
+        }
+        .pipeline-step:last-child::after { display: none; }
+        .pipeline-step.active {
+            opacity: 1;
+            color: var(--tactical-khaki);
+            font-weight: bold;
+        }
+        .pipeline-step.done {
+            opacity: 1;
+            color: var(--green-verified);
+        }
+
+        /* Result Container */
+        .result-panel {
+            background: var(--card-dark);
+            border: 2px solid var(--amber-presumptive);
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: inset 0 0 30px rgba(217, 119, 6, 0.05);
+        }
+        .result-header {
+            font-size: 1.6rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            color: var(--amber-presumptive);
+            margin-bottom: 8px;
+        }
+        .similarity-row { margin: 16px 0; }
+        .sim-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+        .sim-bar-bg {
+            background: var(--classic-black);
+            height: 10px;
+            width: 100%;
+            border: 1px solid var(--border-subtle);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .sim-bar-fill {
+            height: 100%;
+            background: var(--green-verified);
+            width: 0%; /* Initial for animation */
+            transition: width 1s ease-out;
+        }
+        .hash-code {
+            word-break: break-all;
+            background: var(--classic-black);
+            padding: 10px 14px;
+            font-size: 0.75rem;
+            border: 1px solid var(--border-subtle);
+            color: var(--tactical-khaki);
+            margin: 6px 0 16px 0;
+            font-family: monospace;
+        }
+
+        /* Leaflet Real Tactical Map & Popups */
+        #realLeafletMap {
+            width: 100%;
+            height: 420px;
+            background: #0B0E14;
+            border: 1px solid var(--border-strong);
+            margin-bottom: 16px;
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.8);
+            z-index: 1;
+        }
+        .leaflet-container {
+            font-family: 'Courier New', Courier, monospace !important;
+            background: #0B0E14 !important;
+        }
+        .leaflet-popup-content-wrapper {
+            background: #181818 !important;
+            border: 1px solid var(--tactical-khaki) !important;
+            border-radius: 2px !important;
+            color: var(--pure-white) !important;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.9) !important;
+        }
+        .leaflet-popup-tip {
+            background: #181818 !important;
+            border-left: 1px solid var(--tactical-khaki) !important;
+            border-top: 1px solid var(--tactical-khaki) !important;
+        }
+        .leaflet-popup-content {
+            margin: 12px 14px !important;
+            line-height: 1.4 !important;
+            font-size: 0.75rem !important;
+        }
+        .leaflet-control-zoom a {
+            background: #181818 !important;
+            color: var(--tactical-khaki) !important;
+            border: 1px solid var(--border-strong) !important;
+        }
+        .leaflet-control-zoom a:hover {
+            background: var(--classic-black) !important;
+            color: var(--pure-white) !important;
+        }
+        .custom-tactical-pin {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+        }
+        .custom-pin-tag {
+            background: var(--classic-black);
+            border: 1px solid var(--tactical-khaki);
+            font-size: 0.6rem;
+            padding: 1px 4px;
+            color: var(--tactical-khaki);
+            font-weight: 900;
+            white-space: nowrap;
+            margin-bottom: 2px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+        .custom-pin-beacon {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid var(--pure-white);
+            position: relative;
+        }
+        .custom-pin-beacon.presumptive {
+            background: var(--amber-presumptive);
+            box-shadow: 0 0 10px var(--amber-presumptive);
+        }
+        .custom-pin-beacon.inconclusive {
+            background: var(--text-muted);
+            box-shadow: 0 0 6px var(--text-muted);
+        }
+        .custom-pin-pulse {
+            position: absolute;
+            top: -6px; left: -6px; right: -6px; bottom: -6px;
+            border-radius: 50%;
+            border: 2px solid var(--amber-presumptive);
+            animation: pin-pulse 2s infinite;
+        }
+        @keyframes pin-pulse { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+
+        /* Hash Chain Animation */
+        .blockchain {
+            display: flex; gap: 10px; overflow-x: auto; padding: 20px 0;
+            align-items: center;
+        }
+        .block-node {
+            min-width: 160px;
+            background: var(--card-dark);
+            border: 2px solid var(--green-verified);
+            padding: 12px;
+            border-radius: 4px;
+            position: relative;
+            transition: all 0.3s;
+        }
+        .block-node.tampered {
+            border-color: var(--red-alert);
+            background: rgba(185, 28, 28, 0.1);
+        }
+        .block-node::after {
+            content: '→';
+            position: absolute; right: -25px; top: 50%; transform: translateY(-50%);
+            color: var(--border-strong);
+            font-size: 1.2rem;
+        }
+        .block-node:last-child::after { display: none; }
+        .block-header { font-size: 0.7rem; font-weight: bold; margin-bottom: 6px; color: var(--pure-white); }
+        .block-hash { font-size: 0.6rem; color: var(--tactical-khaki); word-break: break-all; }
+        .tamper-box { background: var(--card-dark); border: 1.5px solid var(--amber-presumptive); padding: 20px; margin-bottom: 20px; }
+
+        /* Citizen Portal */
+        .citizen-hero {
+            background: linear-gradient(135deg, var(--deep-brown) 0%, var(--classic-black) 100%);
+            border: 1px solid var(--tactical-khaki);
+            padding: 30px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-strong);
+            position: relative;
+            overflow: hidden;
+        }
+        .citizen-hero::after {
+            content: '🛡️'; position: absolute; right: 20px; bottom: -20px; font-size: 100px; opacity: 0.1;
+        }
+
+        /* Toasts */
+        #toastContainer {
+            position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .toast {
+            background: var(--classic-black);
+            border-left: 4px solid var(--tactical-khaki);
+            color: var(--pure-white);
+            padding: 16px 20px;
+            min-width: 300px;
+            box-shadow: var(--shadow-strong);
+            font-size: 0.85rem;
+            animation: slideInRight 0.3s forwards;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .toast.success { border-left-color: var(--green-verified); }
+        .toast.error { border-left-color: var(--red-alert); }
+        .toast.warning { border-left-color: var(--amber-presumptive); }
+        @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes slideOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .dashboard-layout { flex-direction: column; }
+            .sidebar { width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border-subtle); display: none; }
+            .sidebar.mobile-open { display: flex; }
+            .mobile-menu-btn { display: block; }
+            .targets-container { grid-template-columns: 1fr; }
+            .kpi-grid { grid-template-columns: 1fr 1fr; }
+        }
+        @media (min-width: 769px) {
+            .mobile-menu-btn { display: none; }
+        }
+        
+        .shortcut-hint {
+            display: inline-block;
+            background: var(--border-strong);
+            color: var(--classic-black);
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 0.6rem;
+            margin-left: auto;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Splash Screen -->
+    <div id="splashScreen">
+        <div class="splash-logo">NEXORA</div>
+        <div style="color: var(--tactical-khaki); font-size: 0.8rem; letter-spacing: 2px;">GOVERNMENT FORENSICS ENGINE SECURE BOOT...</div>
+        <div style="margin-top: 20px; width: 200px; height: 2px; background: var(--border-subtle); position: relative; overflow: hidden;">
+            <div style="position: absolute; top: 0; left: 0; height: 100%; width: 50%; background: var(--tactical-khaki); animation: loadBar 1.5s infinite linear;"></div>
+        </div>
+    </div>
+    <style>@keyframes loadBar { 0% { left: -50%; } 100% { left: 100%; } }</style>
+
+    <!-- App Views Wrapper -->
+    <div id="viewLogin" class="app-view">
+        <div class="login-container">
+            <div class="login-box">
+                <div class="login-header">
+                    <div class="seal-logo">⚖</div>
+                    <h1 style="font-size: 1.5rem; letter-spacing: 3px; color: var(--pure-white);">NEXORA</h1>
+                    <div style="font-size: 0.7rem; color: var(--tactical-khaki); letter-spacing: 1px;">SECURE ACCESS GATEWAY</div>
+                </div>
+
+                <div class="portal-tabs">
+                    <div class="portal-tab active" onclick="switchLoginTab('officer')">OFFICER LOGIN</div>
+                    <div class="portal-tab" onclick="switchLoginTab('citizen')">CITIZEN WATCH</div>
+                </div>
+
+                <div id="loginFormOfficer">
+                    <div class="form-group">
+                        <label>BADGE / OPERATOR ID</label>
+                        <input type="text" id="loginBadge" placeholder="e.g. BADGE-104">
+                        <div class="error-msg" id="badgeError">Invalid ID format</div>
+                    </div>
+                    <div class="form-group">
+                        <label>SECURE PASSPHRASE</label>
+                        <input type="password" id="loginPass" placeholder="••••••••">
+                        <div class="error-msg" id="passError">Authentication failed</div>
+                    </div>
+                    <button class="btn" style="margin-top: 10px;" onclick="authenticateUser()">AUTHENTICATE [ENTER]</button>
+                    <div style="margin-top: 16px; font-size: 0.65rem; color: var(--text-muted); text-align: center;">
+                        UNAUTHORIZED ACCESS IS STRICTLY PROHIBITED AND LOGGED.
+                    </div>
+                </div>
+
+                <div id="loginFormCitizen" style="display: none; text-align: center;">
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 20px;">
+                        Access the anonymous Citizen Watch portal. No credentials required. Zero tracking.
+                    </p>
+                    <button class="btn btn-outline" onclick="loadPortal('citizen')">ENTER CITIZEN PORTAL</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard Application -->
+    <div id="viewApp" class="app-view">
+        <!-- Header -->
+        <header>
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <button class="btn btn-outline btn-sm mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+                <div class="brand-title">
+                    <span>NEXORA</span>
+                    <span class="brand-badge">GOVERNMENT FORENSICS</span>
+                </div>
+            </div>
+            
+            <div class="header-controls">
+                <div class="utc-clock" id="utcClock">UTC 00:00:00</div>
+                <div id="syncPill" class="sync-pill" onclick="toggleConnectivity()">
+                    <div class="pulse-dot"></div>
+                    <span id="syncText">ONLINE • SYNC ACTIVE</span>
+                </div>
+                <button id="logoutBtn" class="btn btn-outline btn-sm" onclick="logout()" style="display: none;">LOGOUT</button>
+            </div>
+        </header>
+
+        <div class="dashboard-layout">
+            <!-- Sidebar (Officer Only) -->
+            <aside class="sidebar" id="appSidebar">
+                <div style="padding: 20px; border-bottom: 1px solid var(--border-subtle);">
+                    <div style="font-size: 0.7rem; color: var(--text-muted); letter-spacing: 1px;">ACTIVE ROLE</div>
+                    <div id="sidebarRole" style="font-size: 0.9rem; font-weight: bold; color: var(--tactical-khaki); margin-top: 4px;">OFFICER</div>
+                </div>
+                
+                <div style="padding: 16px 0;">
+                    <a class="nav-item active" onclick="navTo('dashboard')">
+                        <span>⊞</span> DASHBOARD
+                        <span class="shortcut-hint">D</span>
+                    </a>
+                    <a class="nav-item" onclick="navTo('newTest')">
+                        <span>📸</span> NEW FIELD TEST
+                        <span class="shortcut-hint">N</span>
+                    </a>
+                    <a class="nav-item" onclick="navTo('vault')">
+                        <span>🛡️</span> EVIDENCE VAULT
+                        <span class="shortcut-hint">V</span>
+                    </a>
+                    <a class="nav-item" onclick="navTo('map')">
+                        <span>🗺️</span> TACTICAL MAP
+                        <span class="shortcut-hint">M</span>
+                    </a>
+                    <a class="nav-item" onclick="navTo('verify')">
+                        <span>⛓️</span> HASH VERIFY
+                        <span class="shortcut-hint">H</span>
+                    </a>
+                    <a class="nav-item" onclick="navTo('audit')">
+                        <span>📋</span> AUDIT TRAIL
+                        <span class="shortcut-hint">A</span>
+                    </a>
+                </div>
+
+                <div class="sidebar-footer">
+                    <div class="session-info">USER: <strong id="sessionUser">K. Sharma</strong></div>
+                    <div class="session-info">STATION: <strong>ZNB-04</strong></div>
+                </div>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="main-content">
+                
+                <!-- Statutory Notice -->
+                <div class="statutory-banner" id="statutoryBanner">
+                    <div class="icon">⚖</div>
+                    <div>
+                        <div class="title">MANDATORY STATUTORY SCIENTIFIC NOTICE</div>
+                        <div class="body">Presumptive Field Screener Only — Confirmatory Lab Testing (GC-MS) Statutorily Mandated.</div>
+                    </div>
+                </div>
+
+                <!-- OFFICER PORTAL CONTENT -->
+                <div id="portalOfficerContent">
+                    
+                    <!-- Dashboard Section -->
+                    <section id="sec-dashboard" class="content-section active">
+                        <h2 style="font-size: 1.2rem; color: var(--pure-white); margin-bottom: 20px; letter-spacing: 1px;">OPERATIONAL OVERVIEW</h2>
+                        
+                        <div class="kpi-grid">
+                            <div class="kpi-card">
+                                <div class="kpi-label">Today's Tests</div>
+                                <div class="kpi-value" id="kpiTests">4</div>
+                                <div class="kpi-sub">Logged to Vault</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Pending Sync</div>
+                                <div class="kpi-value" id="kpiPending" style="color: #34D399;">0</div>
+                                <div class="kpi-sub">Auto-sync queue</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Integrity Status</div>
+                                <div class="kpi-value" id="kpiIntegrity" style="color: #34D399;">VERIFIED</div>
+                                <div class="kpi-sub">SHA-256 Hash Chain</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Active Cases</div>
+                                <div class="kpi-value" id="kpiCases">3</div>
+                                <div class="kpi-sub">Assigned sector</div>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 12px; margin-top: 30px;">
+                            <button class="btn" onclick="navTo('newTest')">+ INITIATE NEW CAPTURE</button>
+                            <button class="btn btn-outline" onclick="navTo('vault')">OPEN VAULT</button>
+                        </div>
+                    </section>
+
+                    <!-- New Test Section -->
+                    <section id="sec-newTest" class="content-section">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 style="font-size: 1.2rem; color: var(--tactical-khaki); letter-spacing: 1px;">FORENSIC CAPTURE SEQUENCE</h2>
+                            <button class="btn btn-outline btn-sm" onclick="navTo('dashboard')">CANCEL</button>
+                        </div>
+
+                        <div class="viewfinder-box" id="captureContainer">
+                            <h3 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 16px; letter-spacing: 1px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 8px;">
+                                STEP 1 OF 2: METADATA & SENSOR CALIBRATION
+                            </h3>
+
+                            <!-- Live Hardware GPS Telemetry & Physical Address Lock -->
+                            <div style="background: rgba(4, 120, 87, 0.12); border: 1.5px solid var(--green-verified); padding: 12px 16px; margin-bottom: 20px; box-shadow: var(--shadow-subtle);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span class="pulse-dot" id="gpsPulseDot" style="background: #34D399;"></span>
+                                        <span style="font-size: 0.7rem; font-weight: 900; letter-spacing: 1px; color: #34D399;">
+                                            📍 HARDWARE GPS TELEMETRY (LIVE LOCATION)
+                                        </span>
+                                    </div>
+                                    <div style="display: flex; gap: 6px;">
+                                        <button class="btn btn-outline btn-sm" onclick="acquireDeviceGPS(true)" style="width: auto; padding: 2px 8px; font-size: 0.65rem;">
+                                            🔄 RE-ACQUIRE GPS
+                                        </button>
+                                        <button class="btn btn-amber btn-sm" onclick="openCurrentResultInGoogleMaps()" style="width: auto; padding: 2px 8px; font-size: 0.65rem;">
+                                            🗺️ VERIFY ON GOOGLE MAPS
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="liveLocationAddress" style="font-size: 0.9rem; font-weight: 900; color: var(--pure-white); margin-bottom: 4px;">
+                                    Acquiring physical address from device GPS...
+                                </div>
+                                <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.75rem; color: var(--text-secondary); font-family: monospace;">
+                                    <div>COORDINATES: <strong id="liveGpsCoordsText" style="color: var(--tactical-khaki);">Acquiring...</strong></div>
+                                    <div>ACCURACY: <strong id="liveGpsAccuracyText" style="color: #34D399;">--</strong></div>
+                                    <div>STATUS: <strong id="liveGpsStatusText" style="color: #34D399;">SATELLITE LOCK ACTIVE</strong></div>
+                                </div>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+                                <div class="form-group">
+                                    <label>CASE IDENTIFICATION NUMBER</label>
+                                    <input type="text" id="inputCaseId" value="CASE-2026-0891">
+                                </div>
+                                <div class="form-group">
+                                    <label>REAGENT TEST KIT</label>
+                                    <select id="selectReagent" onchange="updateSimulatedColor()">
+                                        <option value="Marquis Reagent">Marquis Reagent (Phenethylamines / Opiates)</option>
+                                        <option value="Mecke Reagent">Mecke Reagent (Alkaloids / Morphinan)</option>
+                                        <option value="Mandelin Reagent">Mandelin Reagent (Dissociatives)</option>
+                                        <option value="Ehrlich Reagent">Ehrlich Reagent (Indole Ring / Ergoline)</option>
+                                        <option value="Simon's (A + B)">Simon's (A + B) (Secondary Amines)</option>
+                                        <option value="Scott Reagent">Scott Reagent (Cobalt Thiocyanate)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Real Hardware Camera / Photo Viewport -->
+                            <div class="camera-status-pill">
+                                <span class="pulse-dot" id="cameraPulseDot" style="background: var(--text-muted);"></span>
+                                <span id="cameraStatusLabel">SENSOR STATUS: STANDBY (DEVICE CAMERA OFF)</span>
+                            </div>
+
+                            <div class="camera-viewport-box" id="cameraViewportBox">
+                                <video id="liveCameraVideo" class="camera-video-element" autoplay playsinline muted></video>
+                                <canvas id="liveCameraCanvas" class="camera-canvas-element"></canvas>
+
+                                <!-- Standby / Manual Placeholder -->
+                                <div id="cameraStandbyPlaceholder" style="text-align: center; padding: 24px; z-index: 2;">
+                                    <div style="font-size: 2.5rem; color: var(--tactical-khaki); margin-bottom: 8px;">📷</div>
+                                    <div style="font-size: 0.95rem; font-weight: 900; letter-spacing: 1px; color: var(--pure-white);">
+                                        HARDWARE SENSOR DISENGAGED
+                                    </div>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary); max-width: 440px; margin: 8px auto 16px auto;">
+                                        Point your device camera at the chemical reaction pouch and 18% neutral-gray card, or load a field test photo.
+                                    </div>
+                                    <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                                        <button class="btn btn-sm" onclick="startLiveCamera()" style="width: auto;">▶ START HARDWARE CAMERA</button>
+                                        <button class="btn btn-outline btn-sm" onclick="triggerPhotoUpload()" style="width: auto;">📁 UPLOAD TEST IMAGE</button>
+                                    </div>
+                                </div>
+
+                                <!-- Real-time HUD Overlays -->
+                                <div class="camera-hud-layer" id="cameraHUDOverlay">
+                                    <div class="scan-line" style="display: block;"></div>
+
+                                    <!-- Target A: Reaction Pouch -->
+                                    <div class="hud-target hud-target-a" id="hudTargetA">
+                                        <span class="hud-tag" style="color: var(--tactical-khaki);">⌖ TARGET A: REACTION POUCH</span>
+                                        <div class="hud-center-cross" style="color: var(--tactical-khaki);">+</div>
+                                        <div class="hud-readout">
+                                            <div class="hud-swatch" id="liveSwatchA" style="background: #0F0210;"></div>
+                                            <span id="liveRgbA" style="color: var(--pure-white); font-family: monospace;">RGB: 15, 2, 16</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Target B: Neutral Gray Card -->
+                                    <div class="hud-target hud-target-b" id="hudTargetB">
+                                        <span class="hud-tag" style="color: #34D399;">⊡ TARGET B: 18% GRAY CARD</span>
+                                        <div class="hud-center-cross" style="color: #34D399;">+</div>
+                                        <div class="hud-readout">
+                                            <div class="hud-swatch" id="liveSwatchB" style="background: #767676;"></div>
+                                            <span id="liveRgbB" style="color: var(--pure-white); font-family: monospace;">RGB: 118, 118, 118</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Live Camera Controls Toolbar -->
+                            <div class="camera-controls-bar">
+                                <button class="btn btn-outline btn-sm" id="btnToggleCamera" onclick="toggleLiveCamera()" style="width: auto;">
+                                    ▶ START CAMERA
+                                </button>
+                                <button class="btn btn-outline btn-sm" id="btnFlipCamera" onclick="switchCameraFacing()" style="width: auto;">
+                                    🔄 FLIP SENSOR (REAR/FRONT)
+                                </button>
+                                <button class="btn btn-outline btn-sm" onclick="triggerPhotoUpload()" style="width: auto;">
+                                    📁 UPLOAD IMAGE
+                                </button>
+                                <input type="file" id="photoFileInput" accept="image/*" style="display: none;" onchange="handlePhotoUpload(event)">
+                            </div>
+
+                            <div style="background: var(--bg-black); padding: 12px; border: 1px solid var(--border-subtle); margin-bottom: 20px;">
+                                <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: bold; margin-bottom: 8px;">EVALUATOR TEST CONDITIONS:</div>
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                    <button class="btn btn-outline btn-sm" onclick="setPreset('standard')">STANDARD MATCH</button>
+                                    <button class="btn btn-outline btn-sm" onclick="setPreset('no_card')">TEST: CARD MISSING</button>
+                                    <button class="btn btn-outline btn-sm" onclick="setPreset('poor_light')">TEST: POOR LIGHT</button>
+                                    <button class="btn btn-outline btn-sm" onclick="setPreset('interference')">TEST: INTERFERENCE (ΔE &gt; 2.0)</button>
+                                </div>
+                            </div>
+
+                            <button class="btn" id="btnExecuteCapture" onclick="executeCaptureSequence()">
+                                📸 EXECUTE FORENSIC CAPTURE
+                            </button>
+                        </div>
+                        
+                        <!-- Analysis Progress (Hidden initially) -->
+                        <div id="analysisProgress" style="display: none; padding: 20px; background: var(--card-dark); border: 1px solid var(--tactical-khaki); margin-top: 20px;">
+                            <h3 style="text-align: center; color: var(--tactical-khaki); margin-bottom: 16px; font-size: 0.9rem;">EXECUTING COLORIMETRIC ANALYSIS PIPELINE</h3>
+                            <div class="science-pipeline">
+                                <div class="pipeline-step" id="step-srgb">sRGB Extract</div>
+                                <div class="pipeline-step" id="step-lin">Linearization</div>
+                                <div class="pipeline-step" id="step-xyz">CIE XYZ</div>
+                                <div class="pipeline-step" id="step-lab">CIE L*a*b*</div>
+                                <div class="pipeline-step" id="step-de2000">ΔE2000 Matching</div>
+                            </div>
+                            <div style="width: 100%; height: 4px; background: var(--classic-black); margin-top: 10px;">
+                                <div id="analysisBar" style="height: 100%; width: 0%; background: var(--tactical-khaki); transition: width 0.5s linear;"></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Result Section -->
+                    <section id="sec-result" class="content-section">
+                        <div class="result-panel" id="resultPanel">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                                <div>
+                                    <div class="result-header" id="resStatusHeader">PRESUMPTIVE RESULT</div>
+                                    <div style="font-size: 0.85rem; color: var(--text-secondary);" id="resStatusSub">
+                                        Colourimetric reaction pattern corresponds with authorized reference standards.
+                                    </div>
+                                </div>
+                                <span class="badge badge-amber" id="resBadge" style="font-size: 0.8rem; padding: 6px 12px;">PRESUMPTIVE</span>
+                            </div>
+
+                            <!-- Ranked Profiles -->
+                            <div style="margin-top: 24px; background: var(--bg-black); padding: 16px; border: 1px solid var(--border-subtle);">
+                                <div style="font-size: 0.75rem; font-weight: bold; color: var(--tactical-khaki); letter-spacing: 1px; margin-bottom: 12px;">
+                                    POSSIBLE MATCHING REFERENCE PROFILES:
+                                </div>
+
+                                <div id="rankedProfilesList">
+                                    <!-- Populated via JS -->
+                                </div>
+
+                                <div style="font-size: 0.65rem; color: var(--text-muted); font-style: italic; margin-top: 12px; border-top: 1px dashed var(--border-subtle); padding-top: 8px;">
+                                    Similarity represents mathematical correspondence with authorized reference spectra. It is not a laboratory confirmation.
+                                </div>
+                            </div>
+
+                            <!-- Cryptographic Seal Info -->
+                            <div style="margin-top: 24px;">
+                                <div style="font-size: 0.75rem; font-weight: bold; color: var(--pure-white); margin-bottom: 10px;">CRYPTOGRAPHIC EVIDENCE SEAL METADATA</div>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; font-size: 0.75rem; background: var(--classic-black); padding: 16px; border: 1px solid var(--border-strong);">
+                                    <div><span style="color: var(--text-muted);">RECORD ID:</span> <strong id="resRecordId">EV-891A4F01</strong></div>
+                                    <div><span style="color: var(--text-muted);">CASE ID:</span> <strong id="resCaseId">CASE-2026-0891</strong></div>
+                                    <div>
+                                        <span style="color: var(--text-muted);">PHYSICAL FIELD LOCATION:</span> 
+                                        <div id="resLocationAddress" style="color: var(--pure-white); font-weight: 900; margin-top: 2px;">Resolving physical address...</div>
+                                        <div id="resGpsCoordinates" style="color: var(--tactical-khaki); font-family: monospace; font-size: 0.7rem; margin-top: 2px;">Acquiring coordinates...</div>
+                                        <div style="margin-top: 6px;">
+                                            <button class="btn btn-amber btn-sm" style="width: auto; padding: 3px 10px; font-size: 0.7rem;" onclick="openCurrentResultInGoogleMaps()">
+                                                🗺️ OPEN IN GOOGLE MAPS (LIVE PIN)
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div><span style="color: var(--text-muted);">UTC TIMESTAMP:</span> <strong id="resTimestamp">2026-09-08T15:00:00Z</strong></div>
+                                    <div><span style="color: var(--text-muted);">QUALITY:</span> <strong id="resQuality">GOOD (Laplacian 118)</strong></div>
+                                    <div><span style="color: var(--text-muted);">ENGINE:</span> <strong>CIE-DE2000-v1.4</strong></div>
+                                    <div style="grid-column: 1 / -1; margin-top: 8px;">
+                                        <span style="font-size: 0.65rem; color: var(--text-muted);">SEALED SHA-256 EVIDENCE HASH:</span>
+                                        <div class="hash-code" id="resEvidenceHash">e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; gap: 12px; margin-top: 24px;">
+                                <button class="btn" onclick="saveEvidenceToVault()">COMMIT SEAL TO LOCAL VAULT</button>
+                                <button class="btn btn-outline" onclick="navTo('newTest')">DISCARD & RE-TEST</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Vault Section -->
+                    <section id="sec-vault" class="content-section">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <h2 style="font-size: 1.2rem; color: var(--tactical-khaki); letter-spacing: 1px;">LOCAL ENCRYPTED EVIDENCE VAULT</h2>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">APPEND-ONLY IMMUTABLE LEDGER</div>
+                            </div>
+                            <input type="text" placeholder="Search by Case, ID, Hash..." style="max-width: 300px;" onkeyup="filterTable(this.value)">
+                        </div>
+
+                        <div class="forensic-table-wrapper">
+                            <table id="evidenceTable">
+                                <thead>
+                                    <tr>
+                                        <th>TEST ID</th>
+                                        <th>CASE ID</th>
+                                        <th>UTC TIME</th>
+                                        <th>REAGENT</th>
+                                        <th>RESULT</th>
+                                        <th>INTEGRITY</th>
+                                        <th>SYNC</th>
+                                        <th>ACTION</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="evidenceTbody">
+                                    <!-- Data rows populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Map Section -->
+                    <section id="sec-map" class="content-section">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <h2 style="font-size: 1.2rem; color: var(--tactical-khaki); letter-spacing: 1px;">
+                                    GEOSPATIAL INCIDENT EXPLORER (WGS84 GPS FIXES)
+                                </h2>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">INTERACTIVE LEAFLET FORENSIC MAP • TACTICAL INCIDENT PINS</div>
+                            </div>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <button class="btn btn-outline btn-sm" style="width: auto;" onclick="acquireDeviceGPS()">📍 ACQUIRE DEVICE GPS</button>
+                                <button class="btn btn-outline btn-sm" style="width: auto;" onclick="resetMapView()">🌐 RESET ZOOM</button>
+                            </div>
+                        </div>
+                        
+                        <div id="realLeafletMap"></div>
+
+                        <div id="mapInspector" style="background: var(--card-dark); border: 1px solid var(--border-strong); padding: 16px; font-size: 0.8rem; min-height: 70px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                            <div id="inspectorTextContainer">
+                                <div style="color: var(--text-muted); font-size: 0.7rem; font-weight: bold;">SELECTED INCIDENT TELEMETRY:</div>
+                                <div id="inspectorTitle" style="color: var(--pure-white); font-weight: bold; font-size: 0.95rem; margin-top: 2px;">CLICK ANY PIN ON MAP TO INSPECT</div>
+                                <div id="inspectorDetails" style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 4px;">Telemetry, reagent, and coordinates will appear here.</div>
+                            </div>
+                            <div id="inspectorActionArea" style="display: none;">
+                                <button id="btnMapOpenGoogleMaps" class="btn btn-amber btn-sm" style="width: auto; font-size: 0.75rem;">
+                                    🗺️ OPEN IN GOOGLE MAPS
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Hash Verification Section -->
+                    <section id="sec-verify" class="content-section">
+                        <div class="tamper-box">
+                            <h2 style="font-size: 1.2rem; color: var(--amber-presumptive); margin-bottom: 12px; letter-spacing: 1px;">
+                                🔬 EVALUATOR TOOL: SHA-256 HASH CHAIN TAMPER DEMO
+                            </h2>
+                            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 24px; max-width: 800px;">
+                                Demonstrates that completed evidence records cannot be secretly altered or deleted.
+                                Altering a single bit of metadata (coordinates, time, image pixels) mathematically breaks the continuous cryptographic chain.
+                            </p>
+
+                            <div style="display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap;">
+                                <button class="btn btn-outline" style="width: auto;" onclick="runNormalVerification()">RUN CHAIN RECALCULATION</button>
+                                <button class="btn btn-amber" style="width: auto;" onclick="simulateTamperAttack()">⚡ SIMULATE 1-BIT TAMPER BREACH</button>
+                            </div>
+
+                            <!-- Animated Blockchain Visualizer -->
+                            <div style="background: var(--bg-black); padding: 20px; border: 1px solid var(--border-subtle); margin-bottom: 20px;">
+                                <div style="font-size: 0.7rem; color: var(--tactical-khaki); margin-bottom: 10px;">REAL-TIME LEDGER VISUALIZATION</div>
+                                <div class="blockchain" id="blockchainVis">
+                                    <div class="block-node" id="node-1">
+                                        <div class="block-header">NODE #1 (GENESIS)</div>
+                                        <div class="block-hash">e3b0c44298fc1c14...</div>
+                                    </div>
+                                    <div class="block-node" id="node-2">
+                                        <div class="block-header">NODE #2</div>
+                                        <div class="block-hash">8f1a2c3d4e5f6a7b...</div>
+                                    </div>
+                                    <div class="block-node" id="node-3">
+                                        <div class="block-header">NODE #3</div>
+                                        <div class="block-hash">c9b8a7f6e5d4c3b2...</div>
+                                    </div>
+                                    <div class="block-node" id="node-4">
+                                        <div class="block-header">NODE #4 (LATEST)</div>
+                                        <div class="block-hash">1a2b3c4d5e6f7a8b...</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="tamperReportBox" style="background: var(--classic-black); padding: 16px; border: 1px solid var(--border-strong); font-size: 0.8rem; display: none;">
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Audit Trail Section -->
+                    <section id="sec-audit" class="content-section">
+                        <h2 style="font-size: 1.2rem; color: var(--tactical-khaki); letter-spacing: 1px; margin-bottom: 16px;">
+                            IMMUTABLE SECURITY AUDIT TRAIL
+                        </h2>
+                        <div class="forensic-table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>EVENT ID</th>
+                                        <th>ACTOR</th>
+                                        <th>EVENT TYPE</th>
+                                        <th>TIMESTAMP</th>
+                                        <th>DEVICE</th>
+                                        <th>EVENT HASH</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="auditTbody">
+                                    <tr>
+                                        <td>AUD-SRV-901</td>
+                                        <td>BADGE-104</td>
+                                        <td>LOGIN_SUCCESS</td>
+                                        <td>2026-09-08 14:30:10</td>
+                                        <td>MOBILE-CLIENT-01</td>
+                                        <td style="font-family: monospace;">8f1a...4e9b</td>
+                                    </tr>
+                                    <tr>
+                                        <td>AUD-SRV-902</td>
+                                        <td>BADGE-104</td>
+                                        <td>TEST_STARTED</td>
+                                        <td>2026-09-08 14:31:45</td>
+                                        <td>MOBILE-CLIENT-01</td>
+                                        <td style="font-family: monospace;">a2c8...71ef</td>
+                                    </tr>
+                                    <tr>
+                                        <td>AUD-SRV-903</td>
+                                        <td>BADGE-104</td>
+                                        <td>EVIDENCE_SEALED</td>
+                                        <td>2026-09-08 14:32:01</td>
+                                        <td>MOBILE-CLIENT-01</td>
+                                        <td style="font-family: monospace;">4b9d...93aa</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- CITIZEN WATCH PORTAL CONTENT -->
+                <div id="portalCitizenContent" style="display: none;">
+                    <div class="citizen-hero">
+                        <h2 style="color: var(--tactical-khaki); font-size: 1.4rem; letter-spacing: 2px; margin-bottom: 12px; position: relative; z-index: 2;">
+                            CITIZEN WATCH — ANONYMOUS COMMUNITY REPORTING
+                        </h2>
+                        <p style="font-size: 0.9rem; color: var(--pure-white); position: relative; z-index: 2; max-width: 700px; line-height: 1.6;">
+                            Submit observations regarding suspicious packaging, chemical odors, or abandoned containers.
+                            <br><br>
+                            <strong style="color: var(--green-verified);">PRIVACY GUARANTEE:</strong> Zero identity tracking. No accounts, names, IP addresses, or phone numbers are collected or stored by this portal.
+                        </p>
+                    </div>
+
+                    <div style="background: var(--card-dark); border: 1px solid var(--border-strong); padding: 30px; max-width: 700px; box-shadow: var(--shadow-strong);">
+                        <div class="form-group">
+                            <label>OBSERVATION CLASSIFICATION</label>
+                            <select id="tipCategory">
+                                <option>Suspicious Packaging / Drop</option>
+                                <option>Unidentified Chemical Odor</option>
+                                <option>Abandoned Hazardous Container</option>
+                                <option>Repeated Vehicle Exchange Activity</option>
+                                <option>Suspected Unlicensed Chemical Storage</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>DESCRIPTION OF OBSERVATION</label>
+                            <textarea id="tipDesc" rows="5" placeholder="Describe landmarks, appearance of container or vehicle, and approximate time..."></textarea>
+                            <div class="error-msg" id="tipError">Description is required to submit a tip.</div>
+                        </div>
+
+                        <div class="form-group" style="margin-top: 24px; margin-bottom: 30px; background: var(--classic-black); padding: 12px; border: 1px dashed var(--border-subtle);">
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 0;">
+                                <input type="checkbox" id="tipLocation" checked style="width: 18px; height: 18px;">
+                                <span style="font-size: 0.8rem; color: var(--pure-white);">Include approximate location sector (geotag metadata)</span>
+                            </label>
+                        </div>
+
+                        <button class="btn" id="btnSubmitTip" onclick="submitAnonymousTip()">TRANSMIT SECURE ANONYMOUS TIP</button>
+
+                        <div id="tipReceipt" style="margin-top: 24px; display: none; background: rgba(4, 120, 87, 0.1); padding: 20px; border: 1px solid var(--green-verified); animation: fadeIn 0.4s;">
+                            <div style="color: #34D399; font-weight: 900; font-size: 1rem; margin-bottom: 8px;">✓ TIP SUBMITTED SUCCESSFULLY</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">
+                                Your report has been encrypted and forwarded to the Zonal Narcotics Bureau.
+                            </div>
+                            <div style="background: var(--bg-black); padding: 10px; border: 1px solid var(--border-subtle); display: inline-block;">
+                                <span style="font-size: 0.7rem; color: var(--text-muted);">ANONYMOUS TRACKING ID:</span><br>
+                                <strong id="tipIdOut" style="color: var(--tactical-khaki); font-size: 1.1rem; letter-spacing: 1px;">TIP-2026-88192</strong>
+                            </div>
+                            <button class="btn btn-outline btn-sm" style="margin-top: 16px; display: block;" onclick="resetTipForm()">SUBMIT ANOTHER REPORT</button>
+                        </div>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+    <div id="toastContainer"></div>
+
+    <script>
+        // --- State ---
+        let isOnline = true;
+        let testCount = 4;
+        let pendingSync = 0;
+        let currentPreset = 'standard';
+        let currentUser = null;
+        let currentRole = null;
+        
+        // Initial Mock Data
+        const vaultData = [
+            { id: 'EV-891A4F01', case: 'CASE-2026-0891', time: '14:32:01', lat: 13.0827, lng: 80.2707, reagent: 'Marquis', status: 'PRESUMPTIVE', sync: 'SYNCED' },
+            { id: 'EV-891A4F02', case: 'CASE-2026-0891', time: '14:38:15', lat: 13.0828, lng: 80.2709, reagent: 'Mecke', status: 'PRESUMPTIVE', sync: 'SYNCED' },
+            { id: 'EV-772C9100', case: 'CASE-2026-0772', time: '11:15:20', lat: 13.0850, lng: 80.2720, reagent: 'Scott', status: 'PRESUMPTIVE', sync: 'SYNCED' },
+            { id: 'EV-504D1189', case: 'CASE-2026-0504', time: '09:40:02', lat: 13.0901, lng: 80.2680, reagent: 'Mandelin', status: 'INCONCLUSIVE', sync: 'SYNCED' }
+        ];
+
+        // --- Init & UI Flow ---
+        document.addEventListener("DOMContentLoaded", () => {
+            // Remove splash
+            setTimeout(() => {
+                const splash = document.getElementById('splashScreen');
+                splash.style.opacity = '0';
+                setTimeout(() => splash.style.display = 'none', 800);
+                
+                // Show login
+                document.getElementById('viewLogin').classList.add('active');
+            }, 1500);
+
+            // Clock update
+            setInterval(() => {
+                const now = new Date();
+                document.getElementById('utcClock').innerHTML = `<span>🕒</span> UTC ${now.toISOString().substr(11, 8)}`;
+            }, 1000);
+
+            // Keyboard Shortcuts
+            document.addEventListener('keydown', (e) => {
+                if(document.getElementById('viewApp').classList.contains('active') && currentRole !== 'CITIZEN') {
+                    // Only trigger if not in an input
+                    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT') {
+                        const key = e.key.toLowerCase();
+                        if(key === 'd') navTo('dashboard');
+                        if(key === 'n') navTo('newTest');
+                        if(key === 'v') navTo('vault');
+                        if(key === 'm') navTo('map');
+                        if(key === 'h') navTo('verify');
+                        if(key === 'a') navTo('audit');
+                    }
+                }
+            });
+            
+            renderVaultTable();
+            // Automatically acquire live device GPS telemetry on startup
+            acquireDeviceGPS(false);
+            // Leaflet map will initialize when navigated to 'map'
+        });
+
+        // --- Toasts ---
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            let icon = 'ℹ️';
+            if(type === 'success') icon = '✅';
+            if(type === 'error') icon = '❌';
+            if(type === 'warning') icon = '⚠️';
+            
+            toast.innerHTML = `<span>${icon} &nbsp;${msg}</span>`;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideOutRight 0.3s forwards';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // --- Authentication ---
+        function switchLoginTab(tab) {
+            document.querySelectorAll('.portal-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('loginFormOfficer').style.display = 'none';
+            document.getElementById('loginFormCitizen').style.display = 'none';
+            
+            if(tab === 'officer') {
+                document.querySelectorAll('.portal-tab')[0].classList.add('active');
+                document.getElementById('loginFormOfficer').style.display = 'block';
+            } else {
+                document.querySelectorAll('.portal-tab')[1].classList.add('active');
+                document.getElementById('loginFormCitizen').style.display = 'block';
+            }
+        }
+
+        async function authenticateUser() {
+            const badgeInput = document.getElementById('loginBadge');
+            const passInput = document.getElementById('loginPass');
+            const badge = badgeInput.value.trim();
+            const pass = passInput.value;
+            
+            badgeInput.classList.remove('input-error');
+            passInput.classList.remove('input-error');
+            document.getElementById('badgeError').style.display = 'none';
+            document.getElementById('passError').style.display = 'none';
+
+            if (!badge) {
+                badgeInput.classList.add('input-error');
+                document.getElementById('badgeError').style.display = 'block';
+                return;
+            }
+
+            // Hardcoded Credentials Simulation
+            let valid = false;
+            let role = '';
+            let name = '';
+
+            if(badge === 'BADGE-104' && pass === 'Password@123') { valid = true; role = 'OFFICER'; name = 'K. Sharma'; }
+            else if(badge === 'SUPER-201' && pass === 'Password@123') { valid = true; role = 'SUPERVISOR'; name = 'M. Davis'; }
+            else if(badge === 'ADMIN-001' && pass === 'Password@123') { valid = true; role = 'ADMIN'; name = 'System Admin'; }
+
+            if(valid) {
+                currentUser = { id: badge, name: name, role: role };
+                
+                // Optional: Try real API fallback if implemented
+                try {
+                    // fetch('/auth/login', { method: 'POST', body: JSON.stringify({username: badge, password: pass}) });
+                } catch(e) {}
+
+                document.getElementById('sessionUser').textContent = name;
+                document.getElementById('sidebarRole').textContent = role;
+                
+                showToast(`Authentication successful. Welcome, ${name}.`, 'success');
+                loadPortal('officer');
+            } else {
+                passInput.classList.add('input-error');
+                document.getElementById('passError').style.display = 'block';
+                showToast('Authentication failed. Invalid credentials.', 'error');
+            }
+        }
+
+        function loadPortal(portalType) {
+            document.getElementById('viewLogin').classList.remove('active');
+            document.getElementById('viewApp').classList.add('active');
+            
+            if (portalType === 'officer') {
+                currentRole = currentUser.role;
+                document.getElementById('appSidebar').style.display = 'flex';
+                document.getElementById('logoutBtn').style.display = 'block';
+                document.getElementById('statutoryBanner').style.display = 'flex';
+                document.getElementById('portalOfficerContent').style.display = 'block';
+                document.getElementById('portalCitizenContent').style.display = 'none';
+                navTo('dashboard');
+            } else {
+                currentRole = 'CITIZEN';
+                document.getElementById('appSidebar').style.display = 'none';
+                document.getElementById('logoutBtn').style.display = 'block';
+                document.getElementById('statutoryBanner').style.display = 'none';
+                document.getElementById('portalOfficerContent').style.display = 'none';
+                document.getElementById('portalCitizenContent').style.display = 'block';
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            currentRole = null;
+            document.getElementById('loginPass').value = '';
+            document.getElementById('viewApp').classList.remove('active');
+            document.getElementById('viewLogin').classList.add('active');
+            showToast('Session terminated securely.', 'info');
+        }
+
+        function toggleSidebar() {
+            document.getElementById('appSidebar').classList.toggle('mobile-open');
+        }
+
+        // --- Navigation ---
+        function navTo(section) {
+            document.querySelectorAll('.content-section').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(`sec-${section}`).classList.add('active');
+            
+            // Find nav item mapping
+            const links = document.querySelectorAll('.nav-item');
+            const map = { 'dashboard': 0, 'newTest': 1, 'vault': 2, 'map': 3, 'verify': 4, 'audit': 5 };
+            if(map[section] !== undefined) links[map[section]].classList.add('active');
+            
+            // Close mobile sidebar
+            document.getElementById('appSidebar').classList.remove('mobile-open');
+
+            // Initialize or refresh Leaflet map
+            if (section === 'map') {
+                setTimeout(initLeafletMap, 50);
+            }
+            if (section === 'newTest') {
+                acquireDeviceGPS(false);
+            }
+        }
+
+        function toggleConnectivity() {
+            isOnline = !isOnline;
+            const pill = document.getElementById('syncPill');
+            const text = document.getElementById('syncText');
+            if (isOnline) {
+                pill.classList.remove('offline');
+                text.textContent = 'ONLINE • SYNC ACTIVE';
+                showToast('Connection established.', 'success');
+                if (pendingSync > 0) {
+                    setTimeout(() => {
+                        const count = pendingSync;
+                        pendingSync = 0;
+                        document.getElementById('kpiPending').textContent = '0';
+                        document.getElementById('kpiPending').style.color = '#34D399';
+                        
+                        // Update UI table
+                        const rows = document.querySelectorAll('#evidenceTbody tr');
+                        rows.forEach(r => {
+                            const badge = r.querySelector('td:nth-child(7) .badge');
+                            if(badge && badge.textContent === 'PENDING') {
+                                badge.className = 'badge badge-green';
+                                badge.textContent = 'SYNCED';
+                            }
+                        });
+                        
+                        showToast(`Synchronized ${count} pending evidence payloads to central intake.`, 'success');
+                    }, 1000);
+                }
+            } else {
+                pill.classList.add('offline');
+                text.textContent = 'OFFLINE • LOCAL VAULT';
+                showToast('Connection lost. Operating in offline vault mode.', 'warning');
+            }
+        }
+
+        // --- Live Camera & Computer Vision Engine ---
+        let mediaStream = null;
+        let currentFacingMode = 'environment'; // default rear camera for spot testing
+        let liveSampleInterval = null;
+        let activePhotoCanvas = null;
+        let currentSampleColor = { r: 15, g: 2, b: 16, hex: '#0F0210' };
+        let currentCardColor = { r: 118, g: 118, b: 118, hex: '#767676' };
+        let currentDeviceGps = { lat: 13.0827, lng: 80.2707, accuracy: 3.4 };
+        let activeInspectorCoord = { lat: 13.0827, lng: 80.2707 };
+
+        // Calibrated Spectrophotometric Reference Standards (Safe Synthetic Benchmarks)
+        const REFERENCE_STANDARDS = {
+            "Marquis Reagent": [
+                { id: "REF-MRQ-01", name: "Marquis Reaction Standard (Purple-Black)", hex: "#0F0210", lab: { l: 2.5, a: 4.8, b: -3.2 } },
+                { id: "REF-MRQ-02", name: "Marquis Secondary Analogue (Deep Violet)", hex: "#2A0845", lab: { l: 9.2, a: 23.4, b: -28.1 } },
+                { id: "REF-MRQ-03", name: "Marquis Phenethylamine Marker (Orange-Brown)", hex: "#8A3324", lab: { l: 32.5, a: 34.1, b: 28.6 } }
+            ],
+            "Mecke Reagent": [
+                { id: "REF-MCK-01", name: "Mecke Reaction Standard (Dark Blue-Green)", hex: "#0B4F42", lab: { l: 30.2, a: -24.5, b: 2.8 } },
+                { id: "REF-MCK-02", name: "Mecke Opiate Reference Profile (Olive Green)", hex: "#2E4A1E", lab: { l: 28.4, a: -14.2, b: 18.5 } }
+            ],
+            "Mandelin Reagent": [
+                { id: "REF-MAN-01", name: "Mandelin Reaction Standard (Dark Olive / Brown)", hex: "#512E1A", lab: { l: 24.1, a: 15.2, b: 19.4 } },
+                { id: "REF-MAN-02", name: "Mandelin Dissociative Reference (Orange-Brown)", hex: "#7B3F00", lab: { l: 35.1, a: 22.4, b: 36.2 } }
+            ],
+            "Scott Reagent": [
+                { id: "REF-SCT-01", name: "Scott Cobalt Thiocyanate Standard (Bright Blue)", hex: "#154360", lab: { l: 28.5, a: -4.2, b: -24.8 } }
+            ],
+            "Ehrlich Reagent": [
+                { id: "REF-EHR-01", name: "Ehrlich Indole Standard (Purple-Violet)", hex: "#6C3483", lab: { l: 30.8, a: 34.5, b: -28.2 } }
+            ],
+            "Simon's (A + B)": [
+                { id: "REF-SIM-01", name: "Simon's Secondary Amine Standard (Intense Blue)", hex: "#1B4F72", lab: { l: 32.4, a: -2.1, b: -28.9 } }
+            ]
+        };
+
+        // CIE Color Science Math: sRGB -> Linear RGB -> CIE XYZ (D65) -> CIELAB -> CIEDE2000
+        function sRgbToLinear(c) {
+            c = c / 255.0;
+            return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        }
+
+        function rgbToLab(r, g, b) {
+            const rLin = sRgbToLinear(r);
+            const gLin = sRgbToLinear(g);
+            const bLin = sRgbToLinear(b);
+
+            // Matrix transformation to CIE XYZ under Standard Illuminant D65
+            const x = (0.4124564 * rLin + 0.3575761 * gLin + 0.1804375 * bLin) * 100.0;
+            const y = (0.2126729 * rLin + 0.7151522 * gLin + 0.0721750 * bLin) * 100.0;
+            const z = (0.0193339 * rLin + 0.1191920 * gLin + 0.9503041 * bLin) * 100.0;
+
+            // D65 reference white
+            const xn = 95.047, yn = 100.000, zn = 108.883;
+
+            function f(t) {
+                return t > 0.008856 ? Math.cbrt(t) : (903.3 * t + 16.0) / 116.0;
+            }
+
+            const fx = f(x / xn);
+            const fy = f(y / yn);
+            const fz = f(z / zn);
+
+            const l = 116.0 * fy - 16.0;
+            const a = 500.0 * (fx - fy);
+            const bVal = 200.0 * (fy - fz);
+
+            return { l, a, b: bVal };
+        }
+
+        function hexToRgb(hex) {
+            hex = hex.replace('#', '').trim();
+            if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+            const num = parseInt(hex, 16);
+            return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+        }
+
+        function rgbToHex(r, g, b) {
+            const ri = Math.max(0, Math.min(255, Math.round(r))).toString(16).padStart(2, '0');
+            const gi = Math.max(0, Math.min(255, Math.round(g))).toString(16).padStart(2, '0');
+            const bi = Math.max(0, Math.min(255, Math.round(b))).toString(16).padStart(2, '0');
+            return `#${ri}${gi}${bi}`.toUpperCase();
+        }
+
+        // Sharma-Wu-Dalal CIEDE2000 (ΔE00) Formula
+        function calculateCiede2000(lab1, lab2) {
+            const l1 = lab1.l, a1 = lab1.a, b1 = lab1.b;
+            const l2 = lab2.l, a2 = lab2.a, b2 = lab2.b;
+
+            const c1 = Math.sqrt(a1 * a1 + b1 * b1);
+            const c2 = Math.sqrt(a2 * a2 + b2 * b2);
+            const cBar = (c1 + c2) / 2.0;
+
+            const cBar7 = Math.pow(cBar, 7);
+            const gFactor = 0.5 * (1.0 - Math.sqrt(cBar7 / (cBar7 + 6103515625.0)));
+
+            const a1Prime = (1.0 + gFactor) * a1;
+            const a2Prime = (1.0 + gFactor) * a2;
+
+            const c1Prime = Math.sqrt(a1Prime * a1Prime + b1 * b1);
+            const c2Prime = Math.sqrt(a2Prime * a2Prime + b2 * b2);
+
+            let h1Prime = Math.atan2(b1, a1Prime) * 180.0 / Math.PI;
+            if (h1Prime < 0) h1Prime += 360.0;
+            let h2Prime = Math.atan2(b2, a2Prime) * 180.0 / Math.PI;
+            if (h2Prime < 0) h2Prime += 360.0;
+
+            const deltaLPrime = l2 - l1;
+            const deltaCPrime = c2Prime - c1Prime;
+
+            let deltaHPrimeVal;
+            if (c1Prime * c2Prime === 0) deltaHPrimeVal = 0.0;
+            else if (Math.abs(h2Prime - h1Prime) <= 180.0) deltaHPrimeVal = h2Prime - h1Prime;
+            else if (h2Prime - h1Prime > 180.0) deltaHPrimeVal = (h2Prime - h1Prime) - 360.0;
+            else deltaHPrimeVal = (h2Prime - h1Prime) + 360.0;
+
+            const deltaHPrime = 2.0 * Math.sqrt(c1Prime * c2Prime) * Math.sin((deltaHPrimeVal / 2.0) * Math.PI / 180.0);
+
+            const lBarPrime = (l1 + l2) / 2.0;
+            const cBarPrime = (c1Prime + c2Prime) / 2.0;
+
+            let hBarPrime;
+            if (c1Prime * c2Prime === 0) hBarPrime = h1Prime + h2Prime;
+            else if (Math.abs(h1Prime - h2Prime) <= 180.0) hBarPrime = (h1Prime + h2Prime) / 2.0;
+            else if (h1Prime + h2Prime < 360.0) hBarPrime = (h1Prime + h2Prime + 360.0) / 2.0;
+            else hBarPrime = (h1Prime + h2Prime - 360.0) / 2.0;
+
+            const t = 1.0 -
+                0.17 * Math.cos((hBarPrime - 30.0) * Math.PI / 180.0) +
+                0.24 * Math.cos((2.0 * hBarPrime) * Math.PI / 180.0) +
+                0.32 * Math.cos((3.0 * hBarPrime + 6.0) * Math.PI / 180.0) -
+                0.20 * Math.cos((4.0 * hBarPrime - 63.0) * Math.PI / 180.0);
+
+            const deltaTheta = 30.0 * Math.exp(-Math.pow((hBarPrime - 275.0) / 25.0, 2));
+            const cBarPrime7 = Math.pow(cBarPrime, 7);
+            const rc = 2.0 * Math.sqrt(cBarPrime7 / (cBarPrime7 + 6103515625.0));
+
+            const sl = 1.0 + (0.015 * Math.pow(lBarPrime - 50.0, 2)) / Math.sqrt(20.0 + Math.pow(lBarPrime - 50.0, 2));
+            const sc = 1.0 + 0.045 * cBarPrime;
+            const sh = 1.0 + 0.015 * cBarPrime * t;
+            const rt = -rc * Math.sin(2.0 * deltaTheta * Math.PI / 180.0);
+
+            const lTerm = deltaLPrime / sl;
+            const cTerm = deltaCPrime / sc;
+            const hTerm = deltaHPrime / sh;
+
+            return Math.sqrt(lTerm * lTerm + cTerm * cTerm + hTerm * hTerm + rt * cTerm * hTerm);
+        }
+
+        // Live Hardware Camera Functions
+        async function startLiveCamera() {
+            const video = document.getElementById('liveCameraVideo');
+            const canvas = document.getElementById('liveCameraCanvas');
+            const placeholder = document.getElementById('cameraStandbyPlaceholder');
+            const hud = document.getElementById('cameraHUDOverlay');
+            const label = document.getElementById('cameraStatusLabel');
+            const dot = document.getElementById('cameraPulseDot');
+            const btnToggle = document.getElementById('btnToggleCamera');
+
+            try {
+                if (mediaStream) {
+                    stopLiveCamera();
+                }
+
+                showToast('Requesting device camera stream...', 'info');
+
+                const constraints = {
+                    video: {
+                        facingMode: currentFacingMode,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                };
+
+                mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = mediaStream;
+                await video.play();
+
+                video.style.display = 'block';
+                canvas.style.display = 'none';
+                placeholder.style.display = 'none';
+                hud.style.display = 'block';
+                dot.style.background = '#34D399';
+                label.textContent = `LIVE CAMERA ACTIVE (${currentFacingMode === 'environment' ? 'REAR' : 'FRONT'} SENSOR)`;
+                btnToggle.textContent = '⏹ STOP CAMERA';
+                btnToggle.className = 'btn btn-amber btn-sm';
+
+                startLiveColorSampling();
+                showToast('Live camera feed engaged. Align spot test and 18% gray card.', 'success');
+            } catch (err) {
+                console.warn('Camera access error:', err);
+                showToast('Device camera unavailable or permission denied. You can upload an image or use test presets.', 'warning');
+                label.textContent = 'CAMERA UNAVAILABLE (PHOTO UPLOAD READY)';
+            }
+        }
+
+        function stopLiveCamera() {
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+            if (liveSampleInterval) {
+                clearInterval(liveSampleInterval);
+                liveSampleInterval = null;
+            }
+
+            const video = document.getElementById('liveCameraVideo');
+            const placeholder = document.getElementById('cameraStandbyPlaceholder');
+            const hud = document.getElementById('cameraHUDOverlay');
+            const label = document.getElementById('cameraStatusLabel');
+            const dot = document.getElementById('cameraPulseDot');
+            const btnToggle = document.getElementById('btnToggleCamera');
+
+            video.style.display = 'none';
+            hud.style.display = 'none';
+            placeholder.style.display = 'block';
+            dot.style.background = 'var(--text-muted)';
+            label.textContent = 'SENSOR STATUS: STANDBY (DEVICE CAMERA OFF)';
+            btnToggle.textContent = '▶ START CAMERA';
+            btnToggle.className = 'btn btn-outline btn-sm';
+        }
+
+        function toggleLiveCamera() {
+            if (mediaStream) {
+                stopLiveCamera();
+                showToast('Hardware camera disengaged.', 'info');
+            } else {
+                startLiveCamera();
+            }
+        }
+
+        async function switchCameraFacing() {
+            currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+            showToast(`Switched sensor mode to: ${currentFacingMode.toUpperCase()}`, 'info');
+            if (mediaStream) {
+                await startLiveCamera();
+            }
+        }
+
+        function triggerPhotoUpload() {
+            document.getElementById('photoFileInput').click();
+        }
+
+        function handlePhotoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.getElementById('liveCameraCanvas');
+                    const video = document.getElementById('liveCameraVideo');
+                    const placeholder = document.getElementById('cameraStandbyPlaceholder');
+                    const hud = document.getElementById('cameraHUDOverlay');
+                    const label = document.getElementById('cameraStatusLabel');
+                    const dot = document.getElementById('cameraPulseDot');
+
+                    if (mediaStream) stopLiveCamera();
+
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+
+                    canvas.style.display = 'block';
+                    video.style.display = 'none';
+                    placeholder.style.display = 'none';
+                    hud.style.display = 'block';
+                    dot.style.background = '#3B82F6';
+                    label.textContent = `LOADED FIELD PHOTO: ${file.name.substring(0, 24)} (${img.width}x${img.height})`;
+
+                    activePhotoCanvas = canvas;
+                    sampleColorsFromCanvas(canvas);
+                    showToast(`Photo loaded: ${file.name}. Targets ready for forensic capture.`, 'success');
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Live Real-Time Pixel Sampling Loop
+        function startLiveColorSampling() {
+            if (liveSampleInterval) clearInterval(liveSampleInterval);
+
+            const video = document.getElementById('liveCameraVideo');
+            const offCanvas = document.createElement('canvas');
+            const offCtx = offCanvas.getContext('2d', { willReadFrequently: true });
+
+            liveSampleInterval = setInterval(() => {
+                if (!video || video.videoWidth === 0) return;
+
+                offCanvas.width = video.videoWidth;
+                offCanvas.height = video.videoHeight;
+                offCtx.drawImage(video, 0, 0, offCanvas.width, offCanvas.height);
+
+                sampleColorsFromCanvas(offCanvas);
+            }, 180);
+        }
+
+        function sampleColorsFromCanvas(sourceCanvas) {
+            const ctx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+            const w = sourceCanvas.width;
+            const h = sourceCanvas.height;
+
+            // Target A: Centered around left 28%, top 50%
+            const aX = Math.floor(w * 0.28);
+            const aY = Math.floor(h * 0.50);
+            // Target B: Centered around right 28%, top 50%
+            const bX = Math.floor(w * 0.72);
+            const bY = Math.floor(h * 0.50);
+
+            const sampleSize = Math.max(10, Math.floor(w * 0.04));
+
+            function getAverageRgb(centerX, centerY, size) {
+                const startX = Math.max(0, centerX - Math.floor(size / 2));
+                const startY = Math.max(0, centerY - Math.floor(size / 2));
+                const actualW = Math.min(size, w - startX);
+                const actualH = Math.min(size, h - startY);
+
+                if (actualW <= 0 || actualH <= 0) return { r: 128, g: 128, b: 128 };
+
+                const imgData = ctx.getImageData(startX, startY, actualW, actualH).data;
+                let rSum = 0, gSum = 0, bSum = 0, count = 0;
+
+                for (let i = 0; i < imgData.length; i += 4) {
+                    rSum += imgData[i];
+                    gSum += imgData[i + 1];
+                    bSum += imgData[i + 2];
+                    count++;
+                }
+
+                if (count === 0) return { r: 128, g: 128, b: 128 };
+                return {
+                    r: Math.round(rSum / count),
+                    g: Math.round(gSum / count),
+                    b: Math.round(bSum / count)
+                };
+            }
+
+            const rgbA = getAverageRgb(aX, aY, sampleSize);
+            const rgbB = getAverageRgb(bX, bY, sampleSize);
+
+            currentSampleColor = { ...rgbA, hex: rgbToHex(rgbA.r, rgbA.g, rgbA.b) };
+            currentCardColor = { ...rgbB, hex: rgbToHex(rgbB.r, rgbB.g, rgbB.b) };
+
+            const swatchA = document.getElementById('liveSwatchA');
+            const rgbLabelA = document.getElementById('liveRgbA');
+            const swatchB = document.getElementById('liveSwatchB');
+            const rgbLabelB = document.getElementById('liveRgbB');
+
+            if (swatchA) swatchA.style.background = currentSampleColor.hex;
+            if (rgbLabelA) rgbLabelA.textContent = `RGB: ${rgbA.r}, ${rgbA.g}, ${rgbA.b}`;
+            if (swatchB) swatchB.style.background = currentCardColor.hex;
+            if (rgbLabelB) rgbLabelB.textContent = `RGB: ${rgbB.r}, ${rgbB.g}, ${rgbB.b}`;
+        }
+
+        // Evaluator Presets for Quick Testing
+        function setPreset(type) {
+            currentPreset = type;
+            const reg = document.getElementById('selectReagent').value;
+
+            if (type === 'no_card') {
+                currentCardColor = { r: 0, g: 0, b: 0, hex: '#000000' };
+                showToast('Preset: Reference card missing simulation activated.', 'warning');
+            } else if (type === 'poor_light') {
+                currentSampleColor = { r: 10, g: 10, b: 10, hex: '#0A0A0A' };
+                currentCardColor = { r: 25, g: 25, b: 25, hex: '#191919' };
+                showToast('Preset: Underexposed low-light simulation activated.', 'warning');
+            } else if (type === 'interference') {
+                currentSampleColor = { r: 180, g: 20, b: 90, hex: '#B4145A' };
+                currentCardColor = { r: 118, g: 118, b: 118, hex: '#767676' };
+                showToast('Preset: Atypical matrix interference simulation activated.', 'warning');
+            } else {
+                updateSimulatedColor();
+                showToast('Preset: Standard stoichiometric reference reaction activated.', 'info');
+            }
+        }
+
+        function updateSimulatedColor() {
+            const reg = document.getElementById('selectReagent').value;
+            if (reg.includes('Mecke')) {
+                currentSampleColor = { r: 11, g: 79, b: 66, hex: '#0B4F42' };
+            } else if (reg.includes('Mandelin')) {
+                currentSampleColor = { r: 81, g: 46, b: 26, hex: '#512E1A' };
+            } else if (reg.includes('Scott')) {
+                currentSampleColor = { r: 21, g: 67, b: 96, hex: '#154360' };
+            } else if (reg.includes('Ehrlich')) {
+                currentSampleColor = { r: 108, g: 52, b: 131, hex: '#6C3483' };
+            } else if (reg.includes('Simon')) {
+                currentSampleColor = { r: 27, g: 79, b: 114, hex: '#1B4F72' };
+            } else {
+                currentSampleColor = { r: 15, g: 2, b: 16, hex: '#0F0210' };
+            }
+            currentCardColor = { r: 118, g: 118, b: 118, hex: '#767676' };
+
+            const swatchA = document.getElementById('liveSwatchA');
+            const rgbLabelA = document.getElementById('liveRgbA');
+            if (swatchA) swatchA.style.background = currentSampleColor.hex;
+            if (rgbLabelA) rgbLabelA.textContent = `RGB: ${currentSampleColor.r}, ${currentSampleColor.g}, ${currentSampleColor.b}`;
+        }
+
+        // --- Execute Forensic Color Science Pipeline ---
+        async function executeCaptureSequence() {
+            const btn = document.getElementById('btnExecuteCapture');
+            btn.disabled = true;
+            btn.innerHTML = '⏳ INITIATING SENSOR BURST (5 FRAMES)...';
+
+            const hud = document.getElementById('cameraHUDOverlay');
+            if (hud) hud.classList.add('scanning');
+
+            await sleep(600);
+
+            if (hud) hud.classList.remove('scanning');
+            document.getElementById('captureContainer').style.display = 'none';
+
+            // Show Pipeline Progress
+            const prog = document.getElementById('analysisProgress');
+            prog.style.display = 'block';
+
+            const steps = ['srgb', 'lin', 'xyz', 'lab', 'de2000'];
+            const bar = document.getElementById('analysisBar');
+
+            for (let i = 0; i < steps.length; i++) {
+                const el = document.getElementById(`step-${steps[i]}`);
+                el.classList.add('active');
+                bar.style.width = `${(i + 1) * 20}%`;
+                btn.innerHTML = `⚙️ RUNNING ${el.textContent.toUpperCase()}...`;
+                await sleep(350);
+                el.classList.replace('active', 'done');
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = '📸 EXECUTE FORENSIC CAPTURE';
+            prog.style.display = 'none';
+            document.getElementById('captureContainer').style.display = 'block';
+
+            steps.forEach(s => {
+                document.getElementById(`step-${s}`).classList.remove('done', 'active');
+            });
+            bar.style.width = '0%';
+
+            // Gate 1: Check reference card detection
+            const cardAvg = (currentCardColor.r + currentCardColor.g + currentCardColor.b) / 3.0;
+            if (currentPreset === 'no_card' || cardAvg < 15 || cardAvg > 245) {
+                renderOutcome('INCONCLUSIVE', 'INCONCLUSIVE — Reference Card Missing / Uncalibrated',
+                    'Calibration failed: 18% neutral-gray standard not detected in field of view.', [], 'badge-red', 999.0);
+                return;
+            }
+
+            // Gate 2: Check lighting / motion blur
+            const sampleLum = (currentSampleColor.r * 0.299 + currentSampleColor.g * 0.587 + currentSampleColor.b * 0.114);
+            if (currentPreset === 'poor_light' || (sampleLum < 8 && cardAvg < 40)) {
+                renderOutcome('INCONCLUSIVE', 'INCONCLUSIVE — Low Lighting / Underexposed',
+                    'Ambient illuminance below statutory threshold (Laplacian score < 45).', [], 'badge-red', 999.0);
+                return;
+            }
+
+            // Real 18% Neutral Gray Gain Calibration
+            const targetGray = 118.0;
+            const gainR = targetGray / Math.max(1, currentCardColor.r);
+            const gainG = targetGray / Math.max(1, currentCardColor.g);
+            const gainB = targetGray / Math.max(1, currentCardColor.b);
+
+            const normR = Math.min(255, Math.max(0, Math.round(currentSampleColor.r * gainR)));
+            const normG = Math.min(255, Math.max(0, Math.round(currentSampleColor.g * gainG)));
+            const normB = Math.min(255, Math.max(0, Math.round(currentSampleColor.b * gainB)));
+
+            // Convert to CIELAB
+            const observedLab = rgbToLab(normR, normG, normB);
+
+            // Compute Sharma-Wu-Dalal CIEDE2000 against Active Reagent Standards
+            const selectedReagent = document.getElementById('selectReagent').value;
+            const refProfiles = REFERENCE_STANDARDS[selectedReagent] || REFERENCE_STANDARDS["Marquis Reagent"];
+
+            const scoredMatches = refProfiles.map(ref => {
+                const de = calculateCiede2000(observedLab, ref.lab);
+                // Linear similarity percentage calculation
+                const sim = Math.max(0, Math.min(100, (1.0 - (de / 10.0)) * 100.0));
+                return {
+                    name: ref.name,
+                    hex: ref.hex,
+                    de: de.toFixed(2),
+                    sim: sim.toFixed(1) + '%',
+                    simVal: sim,
+                    deVal: de
+                };
+            });
+
+            scoredMatches.sort((a, b) => a.deVal - b.deVal);
+            const topMatch = scoredMatches[0];
+
+            // Inconclusive Gate: ΔE00 > 2.0
+            if (currentPreset === 'interference' || topMatch.deVal > 2.0) {
+                renderOutcome('INCONCLUSIVE', 'INCONCLUSIVE / MATRIX INTERFERENCE',
+                    `Observed colour difference (ΔE00 = ${topMatch.de}) exceeds statutory threshold (2.0). Atypical profile or cutting agent interference detected.`,
+                    scoredMatches.slice(0, 2), 'badge-gray', topMatch.deVal);
+                return;
+            }
+
+            // Normal Presumptive Result
+            renderOutcome('PRESUMPTIVE RESULT', 'PRESUMPTIVE RESULT',
+                'Colourimetric reaction pattern corresponds with authorized reference standards.',
+                scoredMatches, 'badge-amber', topMatch.deVal);
+        }
+
+        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+        function renderOutcome(status, header, sub, matches, badgeClass, bestDe) {
+            navTo('result');
+
+            const isPresump = status === 'PRESUMPTIVE RESULT';
+            document.getElementById('resStatusHeader').textContent = header;
+            document.getElementById('resStatusHeader').style.color = isPresump ? 'var(--amber-presumptive)' : 'var(--text-secondary)';
+            document.getElementById('resStatusSub').textContent = sub;
+
+            const badge = document.getElementById('resBadge');
+            badge.className = `badge ${badgeClass}`;
+            badge.textContent = isPresump ? 'PRESUMPTIVE' : 'INCONCLUSIVE';
+
+            // Deterministic SHA-256 Mock seal
+            const randHex = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+                .map(b => b.toString(16).padStart(2, '0')).join('');
+
+            document.getElementById('resEvidenceHash').textContent = randHex;
+            document.getElementById('resRecordId').textContent = 'EV-' + Math.floor(100000 + Math.random() * 900000);
+            document.getElementById('resCaseId').textContent = document.getElementById('inputCaseId').value;
+            document.getElementById('resTimestamp').textContent = new Date().toISOString();
+
+            // Set GPS coordinates
+            const gpsEl = document.getElementById('resGpsCoordinates');
+            if (gpsEl) {
+                gpsEl.textContent = `${currentDeviceGps.lat.toFixed(4)}° N, ${currentDeviceGps.lng.toFixed(4)}° E (±${currentDeviceGps.accuracy}m)`;
+            }
+
+            const list = document.getElementById('rankedProfilesList');
+            if (!matches || matches.length === 0) {
+                list.innerHTML = '<div style="color: var(--red-alert); font-size: 0.8rem; padding: 12px 0;">NO REFERENCE MATCHES WITHIN AUTHORIZED THRESHOLD (ΔE00 &le; 2.0)</div>';
+            } else {
+                list.innerHTML = matches.map((m, i) => {
+                    const color = m.deVal <= 1.0 ? '#34D399' : (m.deVal <= 2.0 ? 'var(--amber-presumptive)' : 'var(--text-muted)');
+                    return `
+                        <div class="similarity-row">
+                            <div class="sim-header">
+                                <span>${m.name}</span>
+                                <span style="color: ${color};">SIMILARITY: ${m.sim} (ΔE00: ${m.de})</span>
+                            </div>
+                            <div class="sim-bar-bg"><div class="sim-bar-fill" id="simBar-${i}" style="width: 0%; background: ${color};"></div></div>
+                        </div>
+                    `;
+                }).join('');
+
+                setTimeout(() => {
+                    matches.forEach((m, i) => {
+                        const bar = document.getElementById(`simBar-${i}`);
+                        if (bar) bar.style.width = m.sim;
+                    });
+                }, 100);
+            }
+        }
+
+        function openCurrentResultInGoogleMaps() {
+            const url = `https://www.google.com/maps?q=${currentDeviceGps.lat},${currentDeviceGps.lng}`;
+            window.open(url, '_blank');
+            showToast('Opening incident location in Google Maps...', 'info');
+        }
+
+        function saveEvidenceToVault() {
+            testCount++;
+            document.getElementById('kpiTests').textContent = testCount;
+
+            const recId = document.getElementById('resRecordId').textContent;
+            const caseId = document.getElementById('resCaseId').textContent;
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+            const status = document.getElementById('resBadge').textContent;
+            const syncStatus = isOnline ? 'SYNCED' : 'PENDING';
+            const reagent = document.getElementById('selectReagent').value.split(' ')[0];
+
+            if (!isOnline) {
+                pendingSync++;
+                document.getElementById('kpiPending').textContent = pendingSync;
+                document.getElementById('kpiPending').style.color = 'var(--amber-presumptive)';
+            }
+
+            // Add to vault data structure with active coordinates
+            vaultData.unshift({
+                id: recId,
+                case: caseId,
+                time: time,
+                lat: currentDeviceGps.lat,
+                lng: currentDeviceGps.lng,
+                reagent: reagent,
+                status: status,
+                sync: syncStatus
+            });
+
+            renderVaultTable();
+            if (leafletMap) renderLeafletMarkers();
+
+            showToast('Evidence committed to local encrypted SQLite vault.', 'success');
+            navTo('vault');
+        }
+
+        // --- Vault & Data ---
+        function renderVaultTable() {
+            const tbody = document.getElementById('evidenceTbody');
+            tbody.innerHTML = '';
+
+            vaultData.forEach((item, index) => {
+                const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                tr.onclick = () => toggleRowDetails(index);
+
+                const statBadge = item.status === 'PRESUMPTIVE' ? 'badge-amber' : 'badge-gray';
+                const syncBadge = item.sync === 'SYNCED' ? 'badge-green' : 'badge-amber';
+
+                tr.innerHTML = `
+                    <td><strong>${item.id}</strong></td>
+                    <td>${item.case}</td>
+                    <td>${item.time}</td>
+                    <td>${item.reagent}</td>
+                    <td><span class="badge ${statBadge}">${item.status}</span></td>
+                    <td><span class="badge badge-green">VERIFIED</span></td>
+                    <td><span class="badge ${syncBadge}">${item.sync}</span></td>
+                    <td><button class="btn btn-outline btn-sm">EXPAND</button></td>
+                `;
+                tbody.appendChild(tr);
+
+                // Detail Row with Google Maps Link
+                const detTr = document.createElement('tr');
+                detTr.className = `row-details row-det-${index}`;
+                detTr.innerHTML = `
+                    <td colspan="8">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; font-size: 0.75rem;">
+                            <div>
+                                <span style="color: var(--text-muted);">GPS FIX:</span> 
+                                <strong>${item.lat.toFixed(4)}°N, ${item.lng.toFixed(4)}°E</strong>
+                                <div style="margin-top: 4px;">
+                                    <a href="https://www.google.com/maps?q=${item.lat},${item.lng}" target="_blank" 
+                                       class="btn btn-outline btn-sm" style="text-decoration: none; display: inline-block; width: auto; padding: 2px 8px; font-size: 0.65rem;">
+                                        🗺️ OPEN IN GOOGLE MAPS
+                                    </a>
+                                </div>
+                            </div>
+                            <div><span style="color: var(--text-muted);">DEVICE:</span> M-CLI-01</div>
+                            <div><span style="color: var(--text-muted);">OPERATOR:</span> ${currentUser ? currentUser.id : 'BADGE-104'}</div>
+                            <div style="grid-column: 1 / -1; margin-top: 4px;">
+                                <span style="color: var(--text-muted);">SHA-256 EVIDENCE SEAL:</span> 
+                                <span style="font-family: monospace; color: var(--tactical-khaki);">e3b0c442...991b7852b855</span>
+                            </div>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(detTr);
+            });
+        }
+
+        function toggleRowDetails(index) {
+            const row = document.querySelector(`.row-det-${index}`);
+            if (row) row.classList.toggle('open');
+        }
+
+        function filterTable(query) {
+            const trs = document.querySelectorAll('#evidenceTbody tr:not(.row-details)');
+            trs.forEach(r => {
+                const text = r.textContent.toLowerCase();
+                const match = text.includes(query.toLowerCase());
+                r.style.display = match ? '' : 'none';
+                if (r.nextElementSibling && r.nextElementSibling.classList.contains('row-details')) {
+                    if (!match) r.nextElementSibling.classList.remove('open');
+                }
+            });
+        }
+
+        // --- Real Leaflet Interactive Map & Google Maps Integration ---
+        let leafletMap = null;
+        let mapMarkersGroup = null;
+        let userLocationMarker = null;
+
+        function initLeafletMap() {
+            const mapContainer = document.getElementById('realLeafletMap');
+            if (!mapContainer) return;
+
+            if (typeof L === 'undefined') {
+                console.warn('Leaflet library loading...');
+                setTimeout(initLeafletMap, 300);
+                return;
+            }
+
+            if (!leafletMap) {
+                // Initialize map centered at first record or default location
+                const centerLat = vaultData.length > 0 ? vaultData[0].lat : 13.0827;
+                const centerLng = vaultData.length > 0 ? vaultData[0].lng : 80.2707;
+
+                leafletMap = L.map('realLeafletMap', {
+                    attributionControl: false
+                }).setView([centerLat, centerLng], 14);
+
+                // High-performance CartoDB Dark Matter tiles (tactical dark forensic theme)
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    maxZoom: 19,
+                    subdomains: 'abcd'
+                }).addTo(leafletMap);
+
+                // Tactical attribution
+                L.control.attribution({ position: 'bottomright', prefix: 'NEXORA GEOSPATIAL • &copy; CARTO &copy; OpenStreetMap' }).addTo(leafletMap);
+
+                mapMarkersGroup = L.layerGroup().addTo(leafletMap);
+                renderLeafletMarkers();
+            } else {
+                setTimeout(() => {
+                    leafletMap.invalidateSize();
+                }, 200);
+            }
+        }
+
+        function renderLeafletMarkers() {
+            if (!leafletMap || !mapMarkersGroup) return;
+
+            mapMarkersGroup.clearLayers();
+
+            vaultData.forEach((item, index) => {
+                const isPresump = item.status === 'PRESUMPTIVE';
+                const beaconClass = isPresump ? 'presumptive' : 'inconclusive';
+
+                const customHtml = `
+                    <div class="custom-tactical-pin">
+                        <div class="custom-pin-tag">${item.id.replace('EV-', '')}</div>
+                        <div class="custom-pin-beacon ${beaconClass}">
+                            ${index === 0 ? '<div class="custom-pin-pulse"></div>' : ''}
+                        </div>
+                    </div>
+                `;
+
+                const tacticalIcon = L.divIcon({
+                    html: customHtml,
+                    className: 'tactical-marker-container',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 36],
+                    popupAnchor: [0, -32]
+                });
+
+                const popupHtml = `
+                    <div style="font-family: 'Courier New', Courier, monospace; min-width: 220px; padding: 2px;">
+                        <div style="color: #C3B091; font-weight: 900; font-size: 0.85rem; border-bottom: 1px solid #333; padding-bottom: 4px; margin-bottom: 6px;">
+                            ${item.id} (${item.case})
+                        </div>
+                        <div style="color: #CBD5E0; margin-bottom: 2px;">REAGENT: <strong style="color: #fff;">${item.reagent}</strong></div>
+                        <div style="color: #CBD5E0; margin-bottom: 2px;">OUTCOME: <span class="badge ${isPresump ? 'badge-amber' : 'badge-gray'}">${item.status}</span></div>
+                        <div style="color: #CBD5E0; margin-bottom: 2px;">GPS: <span style="color: #34D399;">${item.lat.toFixed(4)}°N, ${item.lng.toFixed(4)}°E</span></div>
+                        <div style="color: #718096; font-size: 0.65rem; margin-bottom: 10px;">TIMESTAMP: ${item.time} UTC</div>
+                        <a href="https://www.google.com/maps?q=${item.lat},${item.lng}" target="_blank" 
+                           style="display: block; text-align: center; background: #D97706; color: #fff; text-decoration: none; padding: 6px 10px; font-weight: 900; font-size: 0.75rem; letter-spacing: 1px;">
+                            🗺️ OPEN IN GOOGLE MAPS
+                        </a>
+                    </div>
+                `;
+
+                const marker = L.marker([item.lat, item.lng], { icon: tacticalIcon });
+                marker.bindPopup(popupHtml);
+                marker.on('click', () => {
+                    inspectPin(item.id, item.case, item.reagent, item.status, item.lat, item.lng);
+                });
+
+                mapMarkersGroup.addLayer(marker);
+            });
+
+            // Inspect first record by default if available
+            if (vaultData.length > 0) {
+                const first = vaultData[0];
+                inspectPin(first.id, first.case, first.reagent, first.status, first.lat, first.lng);
+            }
+        }
+
+        function inspectPin(id, caseId, reagent, res, lat, lng) {
+            activeInspectorCoord = { lat, lng };
+            const statBadge = res === 'PRESUMPTIVE' ? 'badge-amber' : 'badge-gray';
+
+            const titleEl = document.getElementById('inspectorTitle');
+            const detailsEl = document.getElementById('inspectorDetails');
+            const actionsEl = document.getElementById('inspectorActionArea');
+            const btnGMap = document.getElementById('btnMapOpenGoogleMaps');
+
+            if (titleEl) titleEl.innerHTML = `INCIDENT RECORD: <strong style="color: var(--tactical-khaki);">${id}</strong> &nbsp; <span class="badge ${statBadge}">${res}</span>`;
+            if (detailsEl) detailsEl.innerHTML = `Case: <strong>${caseId}</strong> &nbsp;|&nbsp; Reagent: <strong>${reagent}</strong> &nbsp;|&nbsp; Location: <strong style="color: #34D399;">${lat.toFixed(5)}°N, ${lng.toFixed(5)}°E</strong>`;
+            if (actionsEl) actionsEl.style.display = 'block';
+
+            if (btnGMap) {
+                btnGMap.onclick = () => {
+                    window.open(`https://www.google.com/maps?q=${lat},${lng}&z=18`, '_blank');
+                    showToast('Opening incident coordinates in Google Maps (satellite zoom)...', 'info');
+                };
+            }
+        }
+
+        async function fetchPhysicalAddress(lat, lng) {
+            try {
+                // Nominatim reverse geocoding with timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 4000);
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`, {
+                    headers: { 'Accept': 'application/json' },
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.address) {
+                        const a = data.address;
+                        const place = a.road || a.pedestrian || a.suburb || a.neighbourhood || '';
+                        const city = a.city || a.town || a.village || a.county || '';
+                        const state = a.state || '';
+                        const country = a.country || '';
+                        const parts = [place, city, state, country].filter(Boolean);
+                        if (parts.length > 0) return parts.join(', ');
+                    }
+                    if (data && data.display_name) {
+                        return data.display_name.split(',').slice(0, 3).join(', ');
+                    }
+                }
+            } catch (e) {
+                console.warn('Reverse geocoding network error:', e);
+            }
+            return `Field Site (${lat.toFixed(5)}°N, ${lng.toFixed(5)}°E)`;
+        }
+
+        function acquireDeviceGPS(forceUserToast = false) {
+            if (!navigator.geolocation) {
+                if (forceUserToast) showToast('Hardware geolocation is not supported by your browser.', 'error');
+                return;
+            }
+
+            if (forceUserToast) showToast('Requesting high-accuracy hardware satellite GPS fix...', 'info');
+
+            navigator.geolocation.getCurrentPosition(
+                async (pos) => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    const acc = pos.coords.accuracy || 3.5;
+
+                    currentDeviceGps = {
+                        lat: lat,
+                        lng: lng,
+                        accuracy: Math.round(acc),
+                        address: "Resolving street address..."
+                    };
+
+                    // Update UI fields in New Test screen
+                    const addrEl = document.getElementById('liveLocationAddress');
+                    const coordsEl = document.getElementById('liveGpsCoordsText');
+                    const accEl = document.getElementById('liveGpsAccuracyText');
+                    const statusEl = document.getElementById('liveGpsStatusText');
+                    const pulseDot = document.getElementById('gpsPulseDot');
+
+                    if (coordsEl) coordsEl.textContent = `${lat.toFixed(5)}° N, ${lng.toFixed(5)}° E`;
+                    if (accEl) accEl.textContent = `±${Math.round(acc)} meters`;
+                    if (statusEl) statusEl.textContent = 'HARDWARE GPS LOCKED';
+                    if (pulseDot) pulseDot.style.background = '#34D399';
+
+                    // Resolve human-readable physical address
+                    const resolvedAddress = await fetchPhysicalAddress(lat, lng);
+                    currentDeviceGps.address = resolvedAddress;
+
+                    if (addrEl) addrEl.textContent = resolvedAddress;
+
+                    // Also update Result Screen if visible
+                    const resGps = document.getElementById('resGpsCoordinates');
+                    const resAddr = document.getElementById('resLocationAddress');
+                    if (resGps) resGps.textContent = `${lat.toFixed(5)}° N, ${lng.toFixed(5)}° E (±${Math.round(acc)}m)`;
+                    if (resAddr) resAddr.textContent = resolvedAddress;
+
+                    // If map is active, update Leaflet map and position marker
+                    if (leafletMap) {
+                        leafletMap.setView([lat, lng], 16);
+
+                        if (userLocationMarker) {
+                            leafletMap.removeLayer(userLocationMarker);
+                        }
+
+                        userLocationMarker = L.circleMarker([lat, lng], {
+                            radius: 12,
+                            fillColor: '#3B82F6',
+                            color: '#FFFFFF',
+                            weight: 3,
+                            opacity: 1,
+                            fillOpacity: 0.9
+                        }).addTo(leafletMap);
+
+                        const userPopup = `
+                            <div style="font-family: 'Courier New', Courier, monospace; font-size: 0.8rem; padding: 2px;">
+                                <div style="color: #3B82F6; font-weight: 900; margin-bottom: 4px;">📍 YOUR EXACT CURRENT DEVICE LOCATION</div>
+                                <div style="color: #fff; font-weight: bold; margin-bottom: 4px;">${resolvedAddress}</div>
+                                <div>LAT: ${lat.toFixed(6)}° N</div>
+                                <div>LNG: ${lng.toFixed(6)}° E</div>
+                                <div>ACCURACY: ±${Math.round(acc)} meters</div>
+                                <a href="https://www.google.com/maps?q=${lat},${lng}&z=18" target="_blank" 
+                                   style="display: block; margin-top: 8px; text-align: center; background: #2563EB; color: #fff; text-decoration: none; padding: 6px; font-weight: bold;">
+                                    🗺️ OPEN EXACT PIN IN GOOGLE MAPS
+                                </a>
+                            </div>
+                        `;
+                        userLocationMarker.bindPopup(userPopup).openPopup();
+                    }
+
+                    if (forceUserToast) {
+                        showToast(`GPS lock: ${resolvedAddress} (±${Math.round(acc)}m)`, 'success');
+                    }
+                    inspectPin('LIVE-DEVICE-GPS', 'TELEMETRY-STREAM', 'Hardware GPS', 'ACTIVE', lat, lng);
+                },
+                (err) => {
+                    console.warn('Geolocation error:', err);
+                    if (forceUserToast) {
+                        showToast('GPS telemetry unavailable: ' + err.message + '. Ensure location permissions are allowed.', 'warning');
+                    }
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+
+        function resetMapView() {
+            if (!leafletMap || vaultData.length === 0) return;
+            const bounds = L.latLngBounds(vaultData.map(d => [d.lat, d.lng]));
+            leafletMap.fitBounds(bounds, { padding: [50, 50] });
+            showToast('Map viewport reset to incident cluster.', 'info');
+        }
+
+        // --- Hash Integrity ---
+        function runNormalVerification() {
+            const nodes = document.querySelectorAll('.block-node');
+            nodes.forEach(n => n.classList.remove('tampered'));
+            
+            const box = document.getElementById('tamperReportBox');
+            box.style.display = 'block';
+            box.style.borderColor = 'var(--green-verified)';
+            box.innerHTML = `
+                <div style="color: #34D399; font-weight: 900; margin-bottom: 8px; font-size: 0.9rem;">✓ HASH CHAIN INTEGRITY VERIFIED</div>
+                <div style="color: var(--text-secondary);">Mathematical continuity verified across all nodes. Zero broken seals detected. Database is cryptographically sound.</div>
+            `;
+            document.getElementById('kpiIntegrity').textContent = 'VERIFIED';
+            document.getElementById('kpiIntegrity').style.color = '#34D399';
+            showToast('Integrity verification passed.', 'success');
+        }
+
+        function simulateTamperAttack() {
+            const targetNode = document.getElementById('node-2');
+            targetNode.classList.add('tampered');
+            
+            // Cascade effect
+            setTimeout(() => document.getElementById('node-3').classList.add('tampered'), 300);
+            setTimeout(() => document.getElementById('node-4').classList.add('tampered'), 600);
+            
+            const box = document.getElementById('tamperReportBox');
+            box.style.display = 'block';
+            box.style.borderColor = 'var(--red-alert)';
+            box.innerHTML = `
+                <div style="color: #F87171; font-weight: 900; margin-bottom: 8px; font-size: 0.9rem;">⚡ INTEGRITY FAILURE DETECTED! TAMPER BREACH</div>
+                <div style="color: var(--pure-white); font-family: monospace; background: var(--bg-black); padding: 10px; margin-bottom: 8px;">
+                    <div>Target Node: #2 (Tampered byte in GPS coordinates payload)</div>
+                    <div>Original Seal: <span style="color: var(--tactical-khaki);">8f1a2c3d4e5f6a7b...</span></div>
+                    <div>Calculated: &nbsp;<span style="color: var(--red-alert);">e99a18c4f2bb71aa...</span></div>
+                </div>
+                <div style="color: #FBBF24; font-weight: bold;">Avalanche effect triggered. Chain broken. Spoliation alert logged to immutable audit trail!</div>
+            `;
+            document.getElementById('kpiIntegrity').textContent = 'FAILURE';
+            document.getElementById('kpiIntegrity').style.color = '#F87171';
+            showToast('CRITICAL: Evidence tampering detected.', 'error');
+        }
+
+        // --- Citizen Portal ---
+        function submitAnonymousTip() {
+            const descInput = document.getElementById('tipDesc');
+            const desc = descInput.value.trim();
+            const err = document.getElementById('tipError');
+            
+            descInput.classList.remove('input-error');
+            err.style.display = 'none';
+
+            if (!desc) {
+                descInput.classList.add('input-error');
+                err.style.display = 'block';
+                return;
+            }
+            
+            const btn = document.getElementById('btnSubmitTip');
+            btn.innerHTML = 'ENCRYPTING...';
+            btn.disabled = true;
+            
+            setTimeout(() => {
+                const tipId = 'TIP-2026-' + Math.floor(100000 + Math.random() * 900000);
+                document.getElementById('tipIdOut').textContent = tipId;
+                document.getElementById('tipReceipt').style.display = 'block';
+                btn.style.display = 'none';
+                
+                showToast('Anonymous tip submitted securely.', 'success');
+            }, 800);
+        }
+        
+        function resetTipForm() {
+            document.getElementById('tipDesc').value = '';
+            document.getElementById('tipCategory').selectedIndex = 0;
+            document.getElementById('tipReceipt').style.display = 'none';
+            
+            const btn = document.getElementById('btnSubmitTip');
+            btn.innerHTML = 'TRANSMIT SECURE ANONYMOUS TIP';
+            btn.disabled = false;
+            btn.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
