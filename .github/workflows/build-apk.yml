@@ -40,6 +40,17 @@ jobs:
         run: |
           echo "=== BUILD FAILED: LAST 150 LINES ==="
           tail -n 150 flutter_build.log
+          echo "## Build Failure Log" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -n 120 flutter_build.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-build-log
+          path: flutter_build.log
 
       - name: Verify APK
         shell: bash
