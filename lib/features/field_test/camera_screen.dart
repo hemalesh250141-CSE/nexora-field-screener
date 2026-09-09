@@ -1,3 +1,4 @@
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import '../../core/constants/color_constants.dart';
 import '../../models/user_session.dart';
@@ -25,14 +26,62 @@ class CameraScreen extends StatefulWidget {
 }
 
 class _CameraScreenState extends State<CameraScreen> {
+  CameraController? _controller;
   bool _isCapturing = false;
   int _burstProgress = 0;
   bool _flashOn = false;
+  bool _cameraReady = false;
 
   // Evaluator Simulation Controls
   bool _simulateCardMissing = false;
   bool _simulatePoorQuality = false;
   RgbColor? _customSampleColor;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeCamera();
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initializeCamera() async {
+    try {
+      final cameras = await availableCameras();
+      if (!mounted || cameras.isEmpty) {
+        return;
+      }
+
+      final rearCamera = cameras.firstWhere(
+        (camera) => camera.lensDirection == CameraLensDirection.back,
+        orElse: () => cameras.first,
+      );
+
+      _controller = CameraController(
+        rearCamera,
+        ResolutionPreset.max,
+        enableAudio: false,
+      );
+
+      await _controller!.initialize();
+
+      if (mounted) {
+        setState(() {
+          _cameraReady = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _cameraReady = false;
+        });
+      }
+    }
+  }
 
   Future<void> _captureBurst() async {
     setState(() {
@@ -94,14 +143,20 @@ class _CameraScreenState extends State<CameraScreen> {
           Expanded(
             child: Stack(
               children: [
-                // Simulated camera sensor background with subtle grid
-                Container(
-                  color: const Color(0xFF141414),
-                  child: CustomPaint(
-                    size: Size.infinite,
-                    painter: _ForensicGridPainter(),
+                if (_controller != null && _controller!.value.isInitialized)
+                  Positioned.fill(
+                    child: ClipRRect(
+                      child: CameraPreview(_controller!),
+                    ),
+                  )
+                else
+                  Container(
+                    color: const Color(0xFF141414),
+                    child: CustomPaint(
+                      size: Size.infinite,
+                      painter: _ForensicGridPainter(),
+                    ),
                   ),
-                ),
 
                 // Live Camera Info Overlay
                 Positioned(

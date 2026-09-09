@@ -35,7 +35,7 @@ class ForensicTheme {
           color: NexoraColors.pureWhite,
         ),
       ),
-      cardTheme: const CardTheme(
+      cardTheme: const CardThemeData(
         color: NexoraColors.cardDark,
         elevation: 0,
         margin: EdgeInsets.zero,

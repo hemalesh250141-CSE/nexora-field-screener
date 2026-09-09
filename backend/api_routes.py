@@ -1,4 +1,5 @@
 import json
+import hashlib
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -158,7 +159,10 @@ def verify_evidence_integrity(
     if not rec:
         raise HTTPException(status_code=404, detail="Evidence record not found in vault")
 
-    is_valid = services.verify_evidence_payload(rec.canonical_payload, rec.evidence_hash)
+    chain_result = services.verify_record_chain(
+        db.query(models.EvidenceRecordModel).all()
+    )
+    is_valid = chain_result["valid"] and services.verify_evidence_payload(rec.canonical_payload, rec.evidence_hash)
 
     status_str = "INTEGRITY VERIFIED" if is_valid else "INTEGRITY FAILURE"
 
@@ -174,7 +178,7 @@ def verify_evidence_integrity(
         "record_id": rec.id,
         "evidence_hash": rec.evidence_hash,
         "is_hash_valid": is_valid,
-        "is_chain_intact": is_valid,
+        "is_chain_intact": chain_result["valid"],
         "status": status_str,
         "statutory_disclaimer": settings.MANDATORY_STATUTORY_DISCLAIMER,
     }
@@ -325,6 +329,44 @@ def get_audit_trail(
     current_user: models.User = Depends(security.require_roles(["SUPERVISOR", "ADMIN"])),
 ):
     return db.query(models.AuditEventModel).order_by(models.AuditEventModel.id.desc()).limit(100).all()
+
+@router.post("/integrity/tamper-demo")
+def simulate_tamper_demo(
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(security.get_current_user),
+):
+    records = sorted(
+        db.query(models.EvidenceRecordModel).all(),
+        key=lambda record: record.captured_at_utc,
+    )
+    if len(records) < 2:
+        raise HTTPException(status_code=400, detail="At least two evidence records are required for Node #2 simulation.")
+
+    target = records[1]
+    payload = json.loads(target.canonical_payload)
+    payload["gps"]["latitude"] = float(payload["gps"]["latitude"]) + 0.000001
+    tampered_payload = json.dumps(payload, separators=(",", ":"), ensure_ascii=False, sort_keys=True)
+    tampered_hash = hashlib.sha256(tampered_payload.encode("utf-8")).hexdigest()
+
+    services.log_audit_event(
+        db=db,
+        actor_id=current_user.badge_id,
+        event_type="TAMPER_SIMULATION",
+        related_record_id=target.id,
+        metadata={
+            "targetNode": 2,
+            "targetField": "gps.latitude",
+            "originalEvidenceHash": target.evidence_hash,
+            "tamperedEvidenceHash": tampered_hash,
+        },
+    )
+    return {
+        "targetNode": 2,
+        "targetRecordId": target.id,
+        "originalEvidenceHash": target.evidence_hash,
+        "tamperedEvidenceHash": tampered_hash,
+        "tamperDetected": tampered_hash.lower() != target.evidence_hash.lower(),
+    }
 
 # ==========================================
 # 6. CITIZEN WATCH (PUBLIC TIP INTAKE)

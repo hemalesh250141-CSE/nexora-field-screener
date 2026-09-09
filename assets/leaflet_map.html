@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    html, body, #map { height: 100%; margin: 0; background: #0f141c; }
+    .leaflet-container { font-family: monospace; background: #0f141c; }
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #181818; color: #fff; border: 1px solid #c3b091; }
+    .leaflet-control-zoom a { background: #181818; color: #c3b091; border-color: #39414e; }
+    .evidence-pin { color: #f59e0b; font-size: 30px; text-shadow: 0 0 3px #000; }
+    .evidence-pin.inconclusive { color: #94a3b8; }
+    .gps-pin { color: #60a5fa; font-size: 28px; text-shadow: 0 0 4px #000; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const provider = {
+      tiles: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      options: { maxZoom: 19, subdomains: 'abcd' },
+      attribution: 'NEXORA GEOSPATIAL | CARTO | OpenStreetMap'
+    };
+    const map = L.map('map', { zoomControl: true }).setView([13.0827, 80.2707], 12);
+    L.tileLayer(provider.tiles, provider.options).addTo(map);
+    map.attributionControl.addAttribution(provider.attribution);
+    const evidenceLayer = L.layerGroup().addTo(map);
+    let gpsMarker = null;
+
+    function validCoordinate(latitude, longitude) {
+      return Number.isFinite(latitude) && Number.isFinite(longitude) &&
+        latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+    }
+
+    window.updateEvidence = function(records, current, recenter) {
+      evidenceLayer.clearLayers();
+      const bounds = [];
+      records.forEach(record => {
+        if (!validCoordinate(record.latitude, record.longitude)) return;
+        const inconclusive = record.status !== 'PRESUMPTIVE';
+        const icon = L.divIcon({
+          className: '',
+          html: `<div class="evidence-pin ${inconclusive ? 'inconclusive' : ''}">&#9679;</div>`,
+          iconSize: [30, 30], iconAnchor: [15, 15]
+        });
+        const marker = L.marker([record.latitude, record.longitude], { icon });
+        marker.bindPopup(`<b>${record.id}</b><br>CASE: ${record.caseId}<br>STATUS: ${record.status}<br>GPS: ${record.latitude.toFixed(5)}, ${record.longitude.toFixed(5)}<br>ACCURACY: +/-${record.accuracy.toFixed(1)}m`);
+        marker.on('click', () => markerSelected.postMessage(record.id));
+        marker.addTo(evidenceLayer);
+        bounds.push([record.latitude, record.longitude]);
+      });
+      if (current && validCoordinate(current.latitude, current.longitude)) {
+        const icon = L.divIcon({ className: '', html: '<div class="gps-pin">&#9673;</div>', iconSize: [28, 28], iconAnchor: [14, 14] });
+        if (gpsMarker) gpsMarker.remove();
+        gpsMarker = L.marker([current.latitude, current.longitude], { icon }).addTo(map);
+        gpsMarker.bindPopup(`CURRENT GPS<br>${current.latitude.toFixed(5)}, ${current.longitude.toFixed(5)}<br>ACCURACY: +/-${current.accuracy.toFixed(1)}m`);
+        bounds.push([current.latitude, current.longitude]);
+        if (recenter) map.setView([current.latitude, current.longitude], 15);
+      } else if (recenter && bounds.length) {
+        map.fitBounds(bounds, { padding: [30, 30] });
+      }
+      setTimeout(() => map.invalidateSize(), 100);
+    };
+  </script>
+</body>
+</html>

@@ -133,6 +133,21 @@ class EvidenceService {
   /// Simulates a single-bit alteration on a copy of a record to prove instant tampering detection.
   Future<Map<String, dynamic>> runTamperDemonstration() async {
     final chain = await DatabaseHelper().getEvidenceChainChronological();
-    return HashChainEngine.simulateTamperingDemonstration(chain);
+    final result = HashChainEngine.simulateTamperingDemonstration(chain);
+    if (result['tamperDetected'] == true) {
+      await DatabaseHelper().logAuditEvent(
+        actorId: 'SYSTEM_INTEGRITY_TEST',
+        eventType: 'TAMPER_SIMULATION',
+        relatedRecordId: result['targetRecordId'] as String?,
+        metadata: {
+          'targetNode': result['targetNode'],
+          'targetField': 'gps.latitude',
+          'originalEvidenceHash': result['originalEvidenceHash'],
+          'tamperedEvidenceHash': result['tamperedEvidenceHash'],
+          'verificationStatus': result['verificationResult']['status'],
+        },
+      );
+    }
+    return result;
   }
 }

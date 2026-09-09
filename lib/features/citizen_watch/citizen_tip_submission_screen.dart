@@ -149,19 +149,22 @@ class _CitizenTipSubmissionScreenState extends State<CitizenTipSubmissionScreen>
                   const SizedBox(height: 16),
 
                   // Location Toggle
-                  SwitchListTile(
-                    title: const Text(
-                      'INCLUDE APPROXIMATE LOCATION',
-                      style: TextStyle(fontFamily: 'monospace', fontSize: 12, fontWeight: FontWeight.bold),
+                  Material(
+                    color: Colors.transparent,
+                    child: SwitchListTile(
+                      title: const Text(
+                        'INCLUDE APPROXIMATE LOCATION',
+                        style: TextStyle(fontFamily: 'monospace', fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: const Text(
+                        'Attaches generalized GPS sector coordinates without revealing personal device telemetry.',
+                        style: TextStyle(fontFamily: 'monospace', fontSize: 10, color: NexoraColors.textMuted),
+                      ),
+                      value: _shareLocation,
+                      activeColor: NexoraColors.tacticalKhaki,
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (v) => setState(() => _shareLocation = v),
                     ),
-                    subtitle: const Text(
-                      'Attaches generalized GPS sector coordinates without revealing personal device telemetry.',
-                      style: TextStyle(fontFamily: 'monospace', fontSize: 10, color: NexoraColors.textMuted),
-                    ),
-                    value: _shareLocation,
-                    activeColor: NexoraColors.tacticalKhaki,
-                    contentPadding: EdgeInsets.zero,
-                    onChanged: (v) => setState(() => _shareLocation = v),
                   ),
 
                   const SizedBox(height: 10),

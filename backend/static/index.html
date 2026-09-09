@@ -1302,19 +1302,19 @@
                                 <div class="blockchain" id="blockchainVis">
                                     <div class="block-node" id="node-1">
                                         <div class="block-header">NODE #1 (GENESIS)</div>
-                                        <div class="block-hash">e3b0c44298fc1c14...</div>
+                                        <div class="block-hash">LIVE DATA NOT LOADED</div>
                                     </div>
                                     <div class="block-node" id="node-2">
                                         <div class="block-header">NODE #2</div>
-                                        <div class="block-hash">8f1a2c3d4e5f6a7b...</div>
+                                        <div class="block-hash">LIVE DATA NOT LOADED</div>
                                     </div>
                                     <div class="block-node" id="node-3">
                                         <div class="block-header">NODE #3</div>
-                                        <div class="block-hash">c9b8a7f6e5d4c3b2...</div>
+                                        <div class="block-hash">LIVE DATA NOT LOADED</div>
                                     </div>
                                     <div class="block-node" id="node-4">
                                         <div class="block-header">NODE #4 (LATEST)</div>
-                                        <div class="block-hash">1a2b3c4d5e6f7a8b...</div>
+                                        <div class="block-hash">LIVE DATA NOT LOADED</div>
                                     </div>
                                 </div>
                             </div>
@@ -1342,30 +1342,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="auditTbody">
-                                    <tr>
-                                        <td>AUD-SRV-901</td>
-                                        <td>BADGE-104</td>
-                                        <td>LOGIN_SUCCESS</td>
-                                        <td>2026-09-08 14:30:10</td>
-                                        <td>MOBILE-CLIENT-01</td>
-                                        <td style="font-family: monospace;">8f1a...4e9b</td>
-                                    </tr>
-                                    <tr>
-                                        <td>AUD-SRV-902</td>
-                                        <td>BADGE-104</td>
-                                        <td>TEST_STARTED</td>
-                                        <td>2026-09-08 14:31:45</td>
-                                        <td>MOBILE-CLIENT-01</td>
-                                        <td style="font-family: monospace;">a2c8...71ef</td>
-                                    </tr>
-                                    <tr>
-                                        <td>AUD-SRV-903</td>
-                                        <td>BADGE-104</td>
-                                        <td>EVIDENCE_SEALED</td>
-                                        <td>2026-09-08 14:32:01</td>
-                                        <td>MOBILE-CLIENT-01</td>
-                                        <td style="font-family: monospace;">4b9d...93aa</td>
-                                    </tr>
+                                    <tr><td colspan="6">LIVE AUDIT DATA NOT LOADED</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1440,14 +1417,15 @@
         let currentPreset = 'standard';
         let currentUser = null;
         let currentRole = null;
+        let apiToken = null;
+        let liveEvidence = [];
+        const LEAFLET_TILE_PROVIDER = {
+            url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+            options: { maxZoom: 19, subdomains: 'abcd' },
+            attribution: 'NEXORA GEOSPATIAL • &copy; CARTO &copy; OpenStreetMap'
+        };
         
-        // Initial Mock Data
-        const vaultData = [
-            { id: 'EV-891A4F01', case: 'CASE-2026-0891', time: '14:32:01', lat: 13.0827, lng: 80.2707, reagent: 'Marquis', status: 'PRESUMPTIVE', sync: 'SYNCED' },
-            { id: 'EV-891A4F02', case: 'CASE-2026-0891', time: '14:38:15', lat: 13.0828, lng: 80.2709, reagent: 'Mecke', status: 'PRESUMPTIVE', sync: 'SYNCED' },
-            { id: 'EV-772C9100', case: 'CASE-2026-0772', time: '11:15:20', lat: 13.0850, lng: 80.2720, reagent: 'Scott', status: 'PRESUMPTIVE', sync: 'SYNCED' },
-            { id: 'EV-504D1189', case: 'CASE-2026-0504', time: '09:40:02', lat: 13.0901, lng: 80.2680, reagent: 'Mandelin', status: 'INCONCLUSIVE', sync: 'SYNCED' }
-        ];
+        let vaultData = [];
 
         // --- Init & UI Flow ---
         document.addEventListener("DOMContentLoaded", () => {
@@ -1541,33 +1519,81 @@
                 return;
             }
 
-            // Hardcoded Credentials Simulation
-            let valid = false;
-            let role = '';
-            let name = '';
-
-            if(badge === 'BADGE-104' && pass === 'Password@123') { valid = true; role = 'OFFICER'; name = 'K. Sharma'; }
-            else if(badge === 'SUPER-201' && pass === 'Password@123') { valid = true; role = 'SUPERVISOR'; name = 'M. Davis'; }
-            else if(badge === 'ADMIN-001' && pass === 'Password@123') { valid = true; role = 'ADMIN'; name = 'System Admin'; }
-
-            if(valid) {
-                currentUser = { id: badge, name: name, role: role };
-                
-                // Optional: Try real API fallback if implemented
-                try {
-                    // fetch('/auth/login', { method: 'POST', body: JSON.stringify({username: badge, password: pass}) });
-                } catch(e) {}
-
-                document.getElementById('sessionUser').textContent = name;
-                document.getElementById('sidebarRole').textContent = role;
-                
-                showToast(`Authentication successful. Welcome, ${name}.`, 'success');
+            try {
+                const response = await fetch('/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ badge_id: badge, password: pass })
+                });
+                if (!response.ok) throw new Error('Authentication failed');
+                const session = await response.json();
+                apiToken = session.access_token;
+                currentUser = { id: session.badge_id, name: session.full_name, role: session.role };
+                document.getElementById('sessionUser').textContent = session.full_name;
+                document.getElementById('sidebarRole').textContent = session.role;
+                showToast(`Authentication successful. Welcome, ${session.full_name}.`, 'success');
                 loadPortal('officer');
-            } else {
+                await loadLiveEvidence();
+                await loadAuditTrail();
+            } catch (error) {
                 passInput.classList.add('input-error');
                 document.getElementById('passError').style.display = 'block';
                 showToast('Authentication failed. Invalid credentials.', 'error');
             }
+        }
+
+        async function loadLiveEvidence() {
+            const response = await fetch('/evidence', {
+                headers: { Authorization: `Bearer ${apiToken}` }
+            });
+            if (!response.ok) throw new Error('Evidence vault unavailable');
+            liveEvidence = await response.json();
+            vaultData = liveEvidence.map(record => ({
+                id: record.id,
+                case: record.case_id,
+                time: record.captured_at_utc,
+                lat: record.gps_latitude,
+                lng: record.gps_longitude,
+                reagent: record.reagent_used || 'UNSPECIFIED',
+                status: record.analysis_status,
+                sync: record.sync_status
+            }));
+            renderVaultTable();
+            if (leafletMap) renderLeafletMarkers();
+            liveEvidence.slice(0, 4).forEach((record, index) => {
+                const node = document.getElementById(`node-${index + 1}`);
+                if (node) node.querySelector('.block-hash').textContent = record.record_hash;
+            });
+        }
+
+        async function loadAuditTrail() {
+            const body = document.getElementById('auditTbody');
+            if (!['SUPERVISOR', 'ADMIN'].includes(currentRole)) {
+                body.innerHTML = '<tr><td colspan="6">AUDIT TRAIL REQUIRES SUPERVISOR OR ADMIN AUTHORIZATION</td></tr>';
+                return;
+            }
+            const response = await fetch('/audit', {
+                headers: { Authorization: `Bearer ${apiToken}` }
+            });
+            if (response.status === 401 || response.status === 403) {
+                body.innerHTML = '<tr><td colspan="6">AUDIT TRAIL REQUIRES SUPERVISOR OR ADMIN AUTHORIZATION</td></tr>';
+                return;
+            }
+            if (!response.ok) {
+                body.innerHTML = '<tr><td colspan="6">AUDIT TRAIL UNAVAILABLE</td></tr>';
+                return;
+            }
+            const events = await response.json();
+            body.innerHTML = events.map(event => `
+                <tr>
+                    <td>${event.event_id}</td>
+                    <td>${event.actor_id}</td>
+                    <td>${event.event_type}${event.related_record_id ? ` (${event.related_record_id})` : ''}</td>
+                    <td>${event.timestamp_utc}</td>
+                    <td>${event.device_id}</td>
+                    <td style="font-family: monospace;">${event.event_hash}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="6">NO AUDIT EVENTS</td></tr>';
         }
 
         function loadPortal(portalType) {
@@ -2344,6 +2370,11 @@
         let mapMarkersGroup = null;
         let userLocationMarker = null;
 
+        function isValidCoordinate(latitude, longitude) {
+            return Number.isFinite(latitude) && Number.isFinite(longitude) &&
+                latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+        }
+
         function initLeafletMap() {
             const mapContainer = document.getElementById('realLeafletMap');
             if (!mapContainer) return;
@@ -2356,21 +2387,18 @@
 
             if (!leafletMap) {
                 // Initialize map centered at first record or default location
-                const centerLat = vaultData.length > 0 ? vaultData[0].lat : 13.0827;
-                const centerLng = vaultData.length > 0 ? vaultData[0].lng : 80.2707;
+                const firstValid = vaultData.find(item => isValidCoordinate(item.lat, item.lng));
+                const centerLat = firstValid ? firstValid.lat : 13.0827;
+                const centerLng = firstValid ? firstValid.lng : 80.2707;
 
                 leafletMap = L.map('realLeafletMap', {
                     attributionControl: false
                 }).setView([centerLat, centerLng], 14);
 
-                // High-performance CartoDB Dark Matter tiles (tactical dark forensic theme)
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                    maxZoom: 19,
-                    subdomains: 'abcd'
-                }).addTo(leafletMap);
+                L.tileLayer(LEAFLET_TILE_PROVIDER.url, LEAFLET_TILE_PROVIDER.options).addTo(leafletMap);
 
                 // Tactical attribution
-                L.control.attribution({ position: 'bottomright', prefix: 'NEXORA GEOSPATIAL • &copy; CARTO &copy; OpenStreetMap' }).addTo(leafletMap);
+                L.control.attribution({ position: 'bottomright', prefix: LEAFLET_TILE_PROVIDER.attribution }).addTo(leafletMap);
 
                 mapMarkersGroup = L.layerGroup().addTo(leafletMap);
                 renderLeafletMarkers();
@@ -2387,6 +2415,10 @@
             mapMarkersGroup.clearLayers();
 
             vaultData.forEach((item, index) => {
+                if (!isValidCoordinate(item.lat, item.lng)) {
+                    console.warn('Skipping evidence marker with invalid coordinates:', item.id);
+                    return;
+                }
                 const isPresump = item.status === 'PRESUMPTIVE';
                 const beaconClass = isPresump ? 'presumptive' : 'inconclusive';
 
@@ -2585,30 +2617,78 @@
         }
 
         function resetMapView() {
-            if (!leafletMap || vaultData.length === 0) return;
-            const bounds = L.latLngBounds(vaultData.map(d => [d.lat, d.lng]));
+            const validLocations = vaultData.filter(item => isValidCoordinate(item.lat, item.lng));
+            if (!leafletMap || validLocations.length === 0) return;
+            const bounds = L.latLngBounds(validLocations.map(d => [d.lat, d.lng]));
             leafletMap.fitBounds(bounds, { padding: [50, 50] });
             showToast('Map viewport reset to incident cluster.', 'info');
         }
 
         // --- Hash Integrity ---
-        function runNormalVerification() {
+        async function runNormalVerification() {
             const nodes = document.querySelectorAll('.block-node');
             nodes.forEach(n => n.classList.remove('tampered'));
             
             const box = document.getElementById('tamperReportBox');
             box.style.display = 'block';
-            box.style.borderColor = 'var(--green-verified)';
-            box.innerHTML = `
-                <div style="color: #34D399; font-weight: 900; margin-bottom: 8px; font-size: 0.9rem;">✓ HASH CHAIN INTEGRITY VERIFIED</div>
-                <div style="color: var(--text-secondary);">Mathematical continuity verified across all nodes. Zero broken seals detected. Database is cryptographically sound.</div>
-            `;
-            document.getElementById('kpiIntegrity').textContent = 'VERIFIED';
-            document.getElementById('kpiIntegrity').style.color = '#34D399';
-            showToast('Integrity verification passed.', 'success');
+            if (!apiToken || liveEvidence.length === 0) {
+                box.style.borderColor = 'var(--amber-presumptive)';
+                box.innerHTML = '<div style="color: var(--amber-presumptive); font-weight: 900;">LIVE EVIDENCE DATA REQUIRED</div><div style="color: var(--text-secondary);">Sign in and load the evidence vault before recalculating the SHA-256 chain.</div>';
+                return;
+            }
+            let results;
+            try {
+                results = await Promise.all(liveEvidence.map(async record => {
+                    const response = await fetch(`/evidence/${record.id}/verify`, {
+                        headers: { Authorization: `Bearer ${apiToken}` }
+                    });
+                    return response.json();
+                }));
+            } catch (error) {
+                box.style.borderColor = 'var(--amber-presumptive)';
+                box.innerHTML = '<div style="color: var(--amber-presumptive); font-weight: 900;">BACKEND UNAVAILABLE</div><div style="color: var(--text-secondary);">The chain could not be verified because the backend request failed.</div>';
+                return;
+            }
+            const valid = results.every(result => result.is_hash_valid && result.is_chain_intact);
+            box.style.borderColor = valid ? 'var(--green-verified)' : 'var(--red-alert)';
+            box.innerHTML = valid
+                ? '<div style="color: #34D399; font-weight: 900; margin-bottom: 8px; font-size: 0.9rem;">✓ HASH CHAIN INTEGRITY VERIFIED</div><div style="color: var(--text-secondary);">Canonical payloads, SHA-256 seals, and previous-hash links match the stored evidence.</div>'
+                : '<div style="color: #F87171; font-weight: 900; margin-bottom: 8px; font-size: 0.9rem;">⚡ INTEGRITY FAILURE DETECTED</div><div style="color: var(--text-secondary);">The backend identified a mismatch in the canonical payload or hash-chain link.</div>';
+            document.getElementById('kpiIntegrity').textContent = valid ? 'VERIFIED' : 'FAILURE';
+            document.getElementById('kpiIntegrity').style.color = valid ? '#34D399' : '#F87171';
+            showToast(valid ? 'Integrity verification passed.' : 'Integrity verification failed.', valid ? 'success' : 'error');
         }
 
-        function simulateTamperAttack() {
+        async function simulateTamperAttack() {
+            if (liveEvidence.length < 2) {
+                showToast('At least two live evidence records are required for Node #2 simulation.', 'warning');
+                return;
+            }
+            let simulationResponse;
+            try {
+                simulationResponse = await fetch('/integrity/tamper-demo', {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${apiToken}` }
+                });
+            } catch (error) {
+                showToast('Backend unavailable. Tamper simulation was not recorded.', 'error');
+                return;
+            }
+            if (simulationResponse.status === 401 || simulationResponse.status === 403) {
+                showToast('Authentication or authorization failed. Tamper simulation was not recorded.', 'error');
+                return;
+            }
+            if (simulationResponse.status === 400) {
+                const validation = await simulationResponse.json().catch(() => ({}));
+                showToast(validation.detail || 'Tamper simulation payload was rejected.', 'error');
+                return;
+            }
+            if (!simulationResponse.ok) {
+                showToast('Database error. Tamper simulation was not recorded.', 'error');
+                return;
+            }
+            const simulation = await simulationResponse.json();
+            await loadAuditTrail();
             const targetNode = document.getElementById('node-2');
             targetNode.classList.add('tampered');
             
@@ -2623,8 +2703,8 @@
                 <div style="color: #F87171; font-weight: 900; margin-bottom: 8px; font-size: 0.9rem;">⚡ INTEGRITY FAILURE DETECTED! TAMPER BREACH</div>
                 <div style="color: var(--pure-white); font-family: monospace; background: var(--bg-black); padding: 10px; margin-bottom: 8px;">
                     <div>Target Node: #2 (Tampered byte in GPS coordinates payload)</div>
-                    <div>Original Seal: <span style="color: var(--tactical-khaki);">8f1a2c3d4e5f6a7b...</span></div>
-                    <div>Calculated: &nbsp;<span style="color: var(--red-alert);">e99a18c4f2bb71aa...</span></div>
+                    <div>Original Seal: <span style="color: var(--tactical-khaki);">${simulation.originalEvidenceHash}</span></div>
+                    <div>Calculated: &nbsp;<span style="color: var(--red-alert);">${simulation.tamperedEvidenceHash}</span></div>
                 </div>
                 <div style="color: #FBBF24; font-weight: bold;">Avalanche effect triggered. Chain broken. Spoliation alert logged to immutable audit trail!</div>
             `;

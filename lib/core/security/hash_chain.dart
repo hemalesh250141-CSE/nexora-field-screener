@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'canonical_serializer.dart';
 import 'hash_service.dart';
 
@@ -77,6 +78,7 @@ class HashChainEngine {
       final officerId = rec['officerId'] as String;
       final recordVersion = (rec['recordVersion'] as int?) ?? 1;
       final recordHash = rec['recordHash'] as String;
+      final canonicalPayload = rec['canonicalPayload'] as String?;
 
       // 1. Verify previous hash pointer matches previous link
       if (previousHash.toLowerCase() != expectedPrevious.toLowerCase()) {
@@ -90,7 +92,26 @@ class HashChainEngine {
         };
       }
 
-      // 2. Recalculate this record's hash
+      // 2. Verify the evidence seal from the exact payload stored with the record.
+      if (canonicalPayload == null ||
+          !HashService.verifyEvidenceHash(
+            evidenceHash: evidenceHash,
+            canonicalPayload: canonicalPayload,
+          )) {
+        final calculatedEvidenceHash = canonicalPayload == null
+            ? 'MISSING_CANONICAL_PAYLOAD'
+            : HashService.hashString(canonicalPayload);
+        return {
+          'status': 'INTEGRITY FAILURE',
+          'valid': false,
+          'recordsChecked': i + 1,
+          'failedIndex': i,
+          'failedRecordId': recordId,
+          'reason': 'Evidence payload altered! Calculated seal $calculatedEvidenceHash does not match sealed hash $evidenceHash',
+        };
+      }
+
+      // 3. Recalculate this record's chain hash from stable scalar fields.
       final calculatedHash = calculateRecordHash(
         recordId: recordId,
         evidenceHash: evidenceHash,
@@ -135,23 +156,36 @@ class HashChainEngine {
     // Deep copy the chain
     final clonedChain = originalChain.map((r) => Map<String, dynamic>.from(r)).toList();
 
-    // Select the last record and alter its evidenceHash by changing a single character
-    final lastIdx = clonedChain.length - 1;
-    final target = clonedChain[lastIdx];
+    if (clonedChain.length < 2) {
+      return {
+        'error': 'Tamper demo requires at least two evidence records so Node #2 can be targeted.'
+      };
+    }
+
+    // Alter Node #2's GPS payload while retaining its original stored seal.
+    const targetIndex = 1;
+    final target = clonedChain[targetIndex];
+    final originalPayload = target['canonicalPayload'] as String;
+    final payloadMap = jsonDecode(originalPayload) as Map<String, dynamic>;
+    final gps = Map<String, dynamic>.from(payloadMap['gps'] as Map);
+    gps['latitude'] = (gps['latitude'] as num).toDouble() + 0.000001;
+    payloadMap['gps'] = gps;
+    final tamperedPayload = CanonicalSerializer.serialize(payloadMap);
     final originalHash = target['evidenceHash'] as String;
+    final tamperedHash = HashService.hashString(tamperedPayload);
+    target['canonicalPayload'] = tamperedPayload;
 
-    // Flip the first character
-    final tamperedHash = (originalHash.startsWith('a') ? 'b' : 'a') + originalHash.substring(1);
-    target['evidenceHash'] = tamperedHash;
-
-    // Run verification on the tampered copy
+    // Verify against the untouched stored seal and chain hashes.
     final verificationResult = verifyChain(clonedChain);
 
     return {
       'demonstration': 'TAMPER DETECTION TEST',
       'targetRecordId': target['id'],
+      'targetNode': targetIndex + 1,
       'originalEvidenceHash': originalHash,
       'tamperedEvidenceHash': tamperedHash,
+      'originalCanonicalPayload': originalPayload,
+      'tamperedCanonicalPayload': tamperedPayload,
       'verificationResult': verificationResult,
       'tamperDetected': !verificationResult['valid'],
     };

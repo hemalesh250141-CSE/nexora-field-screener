@@ -24,14 +24,21 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _bootstrap() async {
     await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
     setState(() => _statusText = 'LOADING REFERENCE PROFILE REPOSITORY...');
+
     await DatabaseHelper().initialize();
 
     await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
     setState(() => _statusText = 'VERIFYING HARDWARE CRYPTO KEYSTORE...');
 
     await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
     setState(() => _statusText = 'BOOT COMPLETE. READY.');
+
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
 
     if (mounted) {
       Navigator.of(context).pushReplacement(

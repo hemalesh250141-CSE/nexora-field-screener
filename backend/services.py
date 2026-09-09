@@ -45,6 +45,60 @@ def verify_evidence_payload(canonical_payload: str, expected_hash: str) -> bool:
     computed = hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest()
     return computed.lower() == expected_hash.lower()
 
+def calculate_record_hash(
+    record_id: str,
+    evidence_hash: str,
+    previous_record_hash: str,
+    timestamp_utc: str,
+    officer_id: str,
+    record_version: int,
+) -> str:
+    payload = {
+        "recordId": record_id,
+        "evidenceHash": evidence_hash,
+        "previousRecordHash": previous_record_hash,
+        "timestampUtc": timestamp_utc,
+        "officerId": officer_id,
+        "recordVersion": record_version,
+    }
+    canonical = json.dumps(payload, separators=(",", ":"), ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+def verify_record_chain(records: list[models.EvidenceRecordModel]) -> dict:
+    expected_previous = GENESIS_HASH
+    for index, record in enumerate(sorted(records, key=lambda item: item.captured_at_utc)):
+        if record.previous_record_hash.lower() != expected_previous.lower():
+            return {
+                "valid": False,
+                "failed_index": index,
+                "failed_record_id": record.id,
+                "reason": "Previous hash pointer does not match the preceding record.",
+            }
+        if not verify_evidence_payload(record.canonical_payload, record.evidence_hash):
+            return {
+                "valid": False,
+                "failed_index": index,
+                "failed_record_id": record.id,
+                "reason": "Canonical evidence payload does not match its stored SHA-256 seal.",
+            }
+        calculated = calculate_record_hash(
+            record.id,
+            record.evidence_hash,
+            record.previous_record_hash,
+            record.captured_at_utc,
+            record.officer_id,
+            record.record_version,
+        )
+        if calculated.lower() != record.record_hash.lower():
+            return {
+                "valid": False,
+                "failed_index": index,
+                "failed_record_id": record.id,
+                "reason": f"Calculated record hash {calculated} does not match the stored seal.",
+            }
+        expected_previous = record.record_hash
+    return {"valid": True, "records_checked": len(records)}
+
 def seed_initial_data(db: Session):
     # 1. Seed Users if not present
     if not db.query(models.User).first():

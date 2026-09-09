@@ -1,3 +1,5 @@
+import 'package:geolocator/geolocator.dart';
+
 /// GPS Location Metadata Bundle
 class GpsLocationResult {
   final bool isAvailable;
@@ -49,9 +51,6 @@ class LocationService {
     double defaultLat = 13.0827,
     double defaultLng = 80.2707,
   }) async {
-    // 200ms delay simulating GPS lock
-    await Future.delayed(const Duration(milliseconds: 200));
-
     final nowUtc = DateTime.now().toUtc().toIso8601String();
 
     if (_mockGpsUnavailable) {
@@ -66,13 +65,49 @@ class LocationService {
       );
     }
 
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        return _unavailable(nowUtc, 'Device location services are turned off.');
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return _unavailable(nowUtc, 'Location permission was not granted.');
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 0,
+        ),
+      );
+      return GpsLocationResult(
+        isAvailable: true,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        accuracyMeters: position.accuracy,
+        timestampUtc: position.timestamp.toUtc().toIso8601String(),
+        provider: 'NATIVE_FUSED_LOCATION_PROVIDER',
+      );
+    } catch (error) {
+      return _unavailable(nowUtc, 'GPS could not be read: $error');
+    }
+  }
+
+  GpsLocationResult _unavailable(String timestampUtc, String notice) {
     return GpsLocationResult(
-      isAvailable: true,
-      latitude: defaultLat,
-      longitude: defaultLng,
-      accuracyMeters: 3.4, // Standard 3.4 meter GPS precision
-      timestampUtc: nowUtc,
-      provider: 'NATIVE_FUSED_LOCATION_PROVIDER',
+      isAvailable: false,
+      latitude: 0.0,
+      longitude: 0.0,
+      accuracyMeters: 999.9,
+      timestampUtc: timestampUtc,
+      provider: 'GPS_HARDWARE_UNAVAILABLE',
+      notice: notice,
     );
   }
 }

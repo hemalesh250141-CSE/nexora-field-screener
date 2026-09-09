@@ -1,7 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:collection/collection.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../../core/constants/color_constants.dart';
 import '../../core/storage/database_helper.dart';
 import '../../models/evidence_record.dart';
+import '../../services/location_service.dart';
 import '../../widgets/status_indicator_badge.dart';
 import '../evidence/evidence_detail_screen.dart';
 
@@ -17,12 +21,35 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   List<EvidenceRecord> _records = [];
   EvidenceRecord? _selectedRecord;
+  GpsLocationResult? _currentLocation;
+  String? _locationError;
   bool _isLoading = true;
+  bool _mapReady = false;
+  late final WebViewController _webViewController;
 
   @override
   void initState() {
     super.initState();
+    _webViewController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..addJavaScriptChannel(
+        'markerSelected',
+        onMessageReceived: (message) {
+          final record = _records.where((item) => item.id == message.message).firstOrNull;
+          if (record != null && mounted) setState(() => _selectedRecord = record);
+        },
+      )
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageFinished: (_) {
+            _mapReady = true;
+            _renderMap();
+          },
+        ),
+      )
+      ..loadFlutterAsset('assets/leaflet_map.html');
     _loadLocations();
+    _findDeviceLocation(moveMap: false);
   }
 
   Future<void> _loadLocations() async {
@@ -34,7 +61,47 @@ class _MapScreenState extends State<MapScreen> {
         if (all.isNotEmpty) _selectedRecord = all.first;
         _isLoading = false;
       });
+      _renderMap();
     }
+  }
+
+  Future<void> _findDeviceLocation({bool moveMap = true}) async {
+    final result = await LocationService().getCurrentLocation();
+    if (!mounted) return;
+    setState(() {
+      _currentLocation = result.isAvailable ? result : null;
+      _locationError = result.isAvailable ? null : result.notice;
+    });
+    if (result.isAvailable && moveMap) _renderMap(recenter: true);
+  }
+
+  static bool _isValidCoordinate(double latitude, double longitude) {
+    return latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180 &&
+        (latitude != 0 || longitude != 0);
+  }
+
+  Future<void> _renderMap({bool recenter = false}) async {
+    if (!_mapReady) return;
+    final validRecords = _records.where((record) {
+      return _isValidCoordinate(record.gpsLatitude, record.gpsLongitude);
+    }).map((record) => {
+      'id': record.id,
+      'caseId': record.caseId,
+      'status': record.analysisStatus,
+      'latitude': record.gpsLatitude,
+      'longitude': record.gpsLongitude,
+      'accuracy': record.gpsAccuracy,
+    }).toList();
+    final current = _currentLocation == null
+        ? null
+        : {
+            'latitude': _currentLocation!.latitude,
+            'longitude': _currentLocation!.longitude,
+            'accuracy': _currentLocation!.accuracyMeters,
+          };
+    await _webViewController.runJavaScript(
+      'window.updateEvidence(${jsonEncode(validRecords)}, ${jsonEncode(current)}, $recenter);',
+    );
   }
 
   @override
@@ -48,6 +115,11 @@ class _MapScreenState extends State<MapScreen> {
             icon: const Icon(Icons.refresh, size: 20),
             onPressed: _loadLocations,
           ),
+            IconButton(
+              icon: const Icon(Icons.my_location, size: 20),
+              tooltip: 'Find my location',
+              onPressed: () => _findDeviceLocation(),
+            ),
         ],
       ),
       body: _isLoading
@@ -78,88 +150,19 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
 
-                // Interactive Simulated Tactical Map Canvas
-                Expanded(
-                  child: Stack(
-                    children: [
-                      // Dark Tactical Map Grid Canvas
-                      Container(
-                        color: const Color(0xFF0F141C),
-                        child: CustomPaint(
-                          size: Size.infinite,
-                          painter: _TacticalMapPainter(),
-                        ),
-                      ),
-
-                      // Location Pins on Map
-                      if (_records.isEmpty)
-                        const Center(
-                          child: Text(
-                            'NO GEOTAGGED TESTS RECORDED',
-                            style: TextStyle(fontFamily: 'monospace', color: NexoraColors.textMuted),
-                          ),
-                        )
-                      else
-                        LayoutBuilder(
-                          builder: (context, constraints) {
-                            return Stack(
-                              children: _records.asMap().entries.map((entry) {
-                                final idx = entry.key;
-                                final rec = entry.value;
-                                final isSelected = _selectedRecord?.id == rec.id;
-
-                                // Spread coordinates across the canvas nicely for demonstration
-                                final xOffset = (constraints.maxWidth * 0.2) + ((idx * 85) % (constraints.maxWidth * 0.6));
-                                final yOffset = (constraints.maxHeight * 0.2) + ((idx * 65) % (constraints.maxHeight * 0.5));
-
-                                final pinColor = rec.analysisStatus == 'PRESUMPTIVE'
-                                    ? NexoraColors.presumptiveAmber
-                                    : NexoraColors.inconclusiveGray;
-
-                                return Positioned(
-                                  left: xOffset,
-                                  top: yOffset,
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      setState(() => _selectedRecord = rec);
-                                    },
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: NexoraColors.classicBlack,
-                                            border: Border.all(
-                                              color: isSelected ? NexoraColors.tacticalKhaki : pinColor,
-                                              width: isSelected ? 2 : 1,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            rec.id,
-                                            style: TextStyle(
-                                              fontFamily: 'monospace',
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.bold,
-                                              color: isSelected ? NexoraColors.tacticalKhaki : NexoraColors.pureWhite,
-                                            ),
-                                          ),
-                                        ),
-                                        Icon(
-                                          Icons.location_on,
-                                          color: pinColor,
-                                          size: isSelected ? 32 : 24,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            );
-                          },
-                        ),
-                    ],
+                if (_locationError != null)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                    color: NexoraColors.cardDark,
+                    child: Text(
+                      _locationError!,
+                      style: const TextStyle(fontFamily: 'monospace', fontSize: 10, color: NexoraColors.presumptiveAmber),
+                    ),
                   ),
+
+                Expanded(
+                  child: WebViewWidget(controller: _webViewController),
                 ),
 
                 // Marker Inspector Bottom Sheet
@@ -239,34 +242,4 @@ class _MapScreenState extends State<MapScreen> {
             ),
     );
   }
-}
-
-class _TacticalMapPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final gridPaint = Paint()
-      ..color = const Color(0xFF1E293B).withOpacity(0.5)
-      ..strokeWidth = 1.0;
-
-    const step = 50.0;
-    for (double x = 0; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-    }
-    for (double y = 0; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    // Concentric coordinate rings
-    final ringPaint = Paint()
-      ..color = NexoraColors.tacticalKhaki.withOpacity(0.12)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-
-    final center = Offset(size.width / 2, size.height / 2);
-    canvas.drawCircle(center, 90, ringPaint);
-    canvas.drawCircle(center, 180, ringPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
