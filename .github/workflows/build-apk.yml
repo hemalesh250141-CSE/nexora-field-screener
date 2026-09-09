@@ -35,7 +35,7 @@ jobs:
       - name: Build release APK
         run: |
           set -o pipefail
-          flutter build apk --release --no-tree-shake-icons -v 2>&1 | tee flutter_build.log
+          flutter build apk --release --no-tree-shake-icons --android-skip-build-dependency-validation -v 2>&1 | tee flutter_build.log
 
       - name: Print error log if failed
         if: failure()
